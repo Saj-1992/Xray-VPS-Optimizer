@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.8.2] — 2026-10-25
+
+### Fixed
+
+- Health score no longer stuck at 60%: DNS and the firewall are decisions the user makes, so they are shown as optional and only count once enabled. "Fix everything" appears only when it can actually improve the score.
+
 ## [2.8.1] — 2026-10-25
 
 ### Fixed

@@ -5,18 +5,25 @@
 # drift) but runs them silently and condenses them into a 0-100 score.
 # ============================================================================
 
-# Registry: "label|verify function" — every row counts toward the score.
-readonly -a ST_HEALTH_CORE=(
-  'Kernel tuning|sysctl_verify'
-  'Network data path|perf_verify'
-  'File limits|limits_verify'
-  'DNS|dns_verify'
+# Registry: "label|verify function|kind".
+#   core      always counts toward the score; "Fix everything" can set it up.
+#   optional  counts only once the user set it up (then it must stay healthy).
+#             Left alone it is shown as "optional" and never lowers the score —
+#             DNS and the firewall need a decision from the user, so an
+#             automatic fix could not raise them anyway.
+readonly -a ST_HEALTH_CHECKS=(
+  'Kernel tuning|sysctl_verify|core'
+  'Network data path|perf_verify|core'
+  'File limits|limits_verify|core'
+  'Proxy priority|priority_verify|optional'
+  'DNS|dns_verify|optional'
 )
 
 ST_HEALTH_SCORE=0
-ST_HEALTH_LIGHTS=() # "label|ok|warn|idle"
+ST_HEALTH_FIXABLE=0 # counted checks that are not OK — what "Fix everything" can improve
+ST_HEALTH_LIGHTS=() # "label|ok|warn|idle|opt"
 
-# _health_light LABEL STATE — record one row; STATE: ok | warn | idle.
+# _health_light LABEL STATE — record one row; STATE: ok | warn | idle | opt.
 _health_light() {
   ST_HEALTH_LIGHTS+=("$1|$2")
 }
@@ -25,31 +32,43 @@ _health_light() {
 # and cache the score so the dashboard can show it without re-running them.
 health_collect() {
   ST_HEALTH_LIGHTS=()
-  local entry label fn rc total=0 good=0
-  for entry in "${ST_HEALTH_CORE[@]}"; do
-    IFS='|' read -r label fn <<<"$entry"
+  ST_HEALTH_FIXABLE=0
+  local entry label fn kind rc total=0 good=0
+  for entry in "${ST_HEALTH_CHECKS[@]}"; do
+    IFS='|' read -r label fn kind <<<"$entry"
     declare -F "$fn" >/dev/null 2>&1 || continue
     rc=0
     "$fn" >/dev/null 2>&1 || rc=$?
-    total=$((total + 1))
     case "$rc" in
       0)
+        total=$((total + 1))
         good=$((good + 1))
         _health_light "$label" ok
         ;;
-      2) _health_light "$label" idle ;;
-      *) _health_light "$label" warn ;;
+      2)
+        if [[ $kind == core ]]; then
+          total=$((total + 1))
+          ST_HEALTH_FIXABLE=$((ST_HEALTH_FIXABLE + 1))
+          _health_light "$label" idle
+        else
+          _health_light "$label" opt
+        fi
+        ;;
+      *)
+        total=$((total + 1))
+        ST_HEALTH_FIXABLE=$((ST_HEALTH_FIXABLE + 1))
+        _health_light "$label" warn
+        ;;
     esac
   done
 
-  # Firewall: optional by design, so a missing one is "idle", never an error,
-  # but it still weighs on the score because an open server is not healthy.
-  total=$((total + 1))
+  # Firewall is a decision, never automatic: it joins the score only once on.
   if has_cmd ufw && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    total=$((total + 1))
     good=$((good + 1))
     _health_light "Firewall (UFW)" ok
   else
-    _health_light "Firewall (UFW)" idle
+    _health_light "Firewall (UFW)" opt
   fi
 
   ST_HEALTH_SCORE=$((total > 0 ? good * 100 / total : 0))
@@ -94,7 +113,8 @@ health_show() {
     case "$state" in
       ok) printf '  %s  %s\n' "$(ui_badge ok)" "$label" ;;
       warn) printf '  %s  %s %s— drifted, needs a fix%s\n' "$(ui_badge warn)" "$label" "$C_WARN" "$C_RESET" ;;
-      *) printf '  %s  %s %s— not set up yet%s\n' "$(ui_badge idle)" "$label" "$C_MUTED" "$C_RESET" ;;
+      opt) printf '  %s  %s %s— optional, not enabled%s\n' "$(ui_badge idle)" "$label" "$C_MUTED" "$C_RESET" ;;
+      *) printf '  %s  %s %s— not set up yet%s\n' "$(ui_badge err)" "$label" "$C_ERR" "$C_RESET" ;;
     esac
   done
 }
@@ -120,7 +140,7 @@ menu_health() {
     health_show
     headroom_show
     ui_hr
-    if ((ST_HEALTH_SCORE < 100)); then
+    if ((ST_HEALTH_FIXABLE > 0)); then
       ui_menu_item 1 "Fix everything" "one-key optimize, no questions"
     fi
     ui_menu_item 2 "Full report" "all system details"
@@ -129,7 +149,7 @@ menu_health() {
     read -rp "$(_ui_prompt)" choice || return 0
     case "${choice:-}" in
       1)
-        if ((ST_HEALTH_SCORE < 100)); then
+        if ((ST_HEALTH_FIXABLE > 0)); then
           ST_OPT_BATCH=1
           go_optimize || true # per-step outcomes are already printed
           ST_OPT_BATCH=0
