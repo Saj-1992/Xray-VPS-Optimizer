@@ -145,7 +145,7 @@ st_report_summary() {
   fi
   ui_kv "Backups" "$ST_RUN_BACKUP_DIR"
   ui_kv "Log" "$ST_LOG_FILE"
-  ui_kv "Rollback" "menu option [4], or: --rollback"
+  ui_kv "Rollback" "Rollback menu, or: --rollback"
   printf '%sNo daemons or cron jobs were installed — nothing stays running.%s\n' "$C_MUTED" "$C_RESET"
 }
 

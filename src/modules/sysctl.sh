@@ -344,7 +344,8 @@ _sysctl_values_match() {
 }
 
 # sysctl_verify [RENDERED] — compare the live kernel against the intent of
-# this profile. Returns 0 when everything matches, 3 on drift.
+# this profile (the text just written, or the file on disk when called with no
+# argument). Returns 0 when everything matches, 2 when never configured, 3 on drift.
 # The caller passes the text it actually wrote: re-rendering here would read
 # live inputs again (listening ports, swap backend) and could compare against
 # a different expectation than the one on disk.
@@ -353,7 +354,13 @@ ST_SYSCTL_DRIFT=()
 sysctl_verify() {
   ST_SYSCTL_DRIFT=()
   local rendered="${1:-}" line key expected actual
-  [[ -n $rendered ]] || rendered="$(_sysctl_render)"
+  if [[ -z $rendered ]]; then
+    # Standalone callers (Doctor, health, menu) have no profile/tier in memory,
+    # so re-rendering would compare against defaults and report false drift on a
+    # perfectly tuned host. The file on disk IS the intent.
+    [[ -f $ST_SYSCTL_FILE ]] || return 2
+    rendered="$(<"$ST_SYSCTL_FILE")"
+  fi
 
   while IFS= read -r line; do
     [[ -z $line || $line == \#* ]] && continue

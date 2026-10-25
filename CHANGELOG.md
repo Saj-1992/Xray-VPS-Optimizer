@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.9.1] — 2026-10-25
+
+### Fixed
+
+- **False "Kernel tuning" drift in Doctor, the health score and the menu.** `sysctl_verify` with no argument re-rendered the config from the current process's defaults (no profile, no tier, empty buffers), so on a perfectly tuned host every fresh `st --verify` or menu open reported drift and the score sat at 60%. It now compares the live kernel with the file ServerTools wrote, and reports "not configured" when there is none.
+
 ## [2.9.0] — 2026-10-25
 
 ### Changed
