@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.7.0] — 2026-10-25
+
+### Added
+
+- `st go` shows the health score before and after (e.g. 40% → 100%).
+- UFW lock-out protection: the port of your current SSH session is always allowed, and ports serving clients right now (panel, nodes, WireGuard) are listed and can be opened automatically before UFW is enabled.
+- Disabling SSH password login now requires typing KEY-OK, so it cannot be accepted by reflex.
+
+### Release
+
+- Tagged releases publish `server-tools.sh` with a SHA-256 checksum; `st --update` verifies it.
+
 ## [2.6.0] — 2026-10-25
 
 ### Added

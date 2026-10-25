@@ -37,6 +37,16 @@ detect_ssh_port() {
   printf '%s' "$port"
 }
 
+# _ssh_session_port — the server-side port of the SSH session running this
+# tool (from SSH_CONNECTION), empty when not run over SSH. It can differ from
+# the configured port (NAT, port forwarding), and blocking it drops the user.
+_ssh_session_port() {
+  local port
+  port="$(awk '{print $4}' <<<"${SSH_CONNECTION:-}")"
+  [[ $port =~ ^[0-9]+$ ]] && printf '%s' "$port"
+  return 0
+}
+
 security_ufw() {
   ui_section "UFW firewall"
   if ! has_cmd ufw; then
@@ -54,6 +64,15 @@ security_ufw() {
     log_error "Could not add the SSH allow rule — aborting before any deny rule."
     return 0
   fi
+  # Safety net 1: the port THIS session arrived on is always allowed too.
+  local session_port
+  session_port="$(_ssh_session_port)"
+  if [[ -n $session_port && $session_port != "$ssh_port" ]]; then
+    printf '%sYou are connected through port %s (sshd listens on %s) — allowing both.%s
+'       "$C_WARN" "$session_port" "$ssh_port" "$C_RESET"
+    ufw allow "${session_port}/tcp" >/dev/null 2>>"$ST_LOG_FILE" ||
+      log_warn "Could not allow your current session port ${session_port}."
+  fi
   ufw default deny incoming >/dev/null 2>>"$ST_LOG_FILE" || log_warn "Could not set default deny incoming."
   ufw default allow outgoing >/dev/null 2>>"$ST_LOG_FILE" || log_warn "Could not set default allow outgoing."
 
@@ -68,6 +87,27 @@ security_ufw() {
         log_warn "Skipped invalid port spec: ${p}"
       fi
     done
+  fi
+
+  # Safety net 2: services that listen publicly right now would go dark the
+  # moment UFW denies by default. Show them and offer to keep them open.
+  local open_ports='' lp
+  while IFS= read -r lp; do
+    [[ $lp =~ ^[0-9]+$ ]] || continue
+    ufw status 2>/dev/null | grep -qE "^${lp}(/| )" && continue
+    [[ $lp == "$ssh_port" || $lp == "$session_port" ]] && continue
+    open_ports+="${lp} "
+  done < <(listening_service_ports)
+  if [[ -n $open_ports ]]; then
+    printf '%sThese ports are serving clients right now but have no allow rule:%s %s
+'       "$C_WARN" "$C_RESET" "$open_ports"
+    printf 'Enabling UFW without them would cut your users off.
+'
+    if ui_confirm_yes "Allow them (tcp+udp) so nothing breaks?"; then
+      for lp in $open_ports; do
+        ufw allow "$lp" >/dev/null 2>>"$ST_LOG_FILE" || log_warn "Rule failed: ${lp}"
+      done
+    fi
   fi
 
   if has_cmd docker && docker ps -q 2>/dev/null | grep -q .; then
@@ -138,7 +178,11 @@ security_ssh() {
   if [[ -s /root/.ssh/authorized_keys ]]; then
     printf 'An SSH key for root exists.\n'
     printf '%sVerify key login works in a second terminal BEFORE confirming.%s\n' "$C_WARN" "$C_RESET"
-    if ui_confirm "Disable password authentication?"; then
+    printf 'Typing KEY-OK below means you tested it. Anything else keeps passwords on.
+'
+    local ack
+    read -rp "Disable password authentication? [KEY-OK / Enter=no]: " ack || ack=''
+    if [[ $ack == KEY-OK ]]; then
       lines+=('PasswordAuthentication no')
     fi
   else
