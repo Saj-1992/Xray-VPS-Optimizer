@@ -104,10 +104,10 @@ _pmtu_probe() {
   local target="$1" lo=1200 hi=1500 mid
   has_cmd ping || return 1
   ping -c1 -W2 -s 56 "$target" >/dev/null 2>&1 || return 1
-  ping -M do -c1 -W1 -s $((lo - 28)) "$target" >/dev/null 2>&1 || return 1
+  ping -M "do" -c1 -W1 -s $((lo - 28)) "$target" >/dev/null 2>&1 || return 1
   while ((lo < hi)); do
     mid=$(((lo + hi + 1) / 2))
-    if ping -M do -c1 -W1 -s $((mid - 28)) "$target" >/dev/null 2>&1; then
+    if ping -M "do" -c1 -W1 -s $((mid - 28)) "$target" >/dev/null 2>&1; then
       lo=$mid
     else
       hi=$((mid - 1))
