@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.8.0] — 2026-10-25
+
+### Added
+
+- **Proxy priority** (Tools → p, `st boost`, and a step in Quick/Auto/Go): native services (xray, x-ui, sing-box, hysteria) get a systemd drop-in with `Nice=-5`, `OOMScoreAdjust=-500`, `CPUWeight=200`, `LimitNOFILE=1048576`; Docker/Podman nodes (Marzban, pg-node, ...) are boosted live — every thread reniced, OOM shield, cpu-shares — with no restart, and re-applied at boot by a oneshot unit that exits immediately. `--no-priority` skips it.
+- **Smart MTU / MSS**: measures the real path MTU with DF pings, compares it with the interface MTU, and clamps MSS to what fits (`--set-mss`, IPv4 and IPv6) when the path is narrower; falls back to automatic clamping otherwise. WireGuard interfaces with an MTU too large for the path are reported with the value to set.
+- **Remaining capacity** on the dashboard and Status & Health: connection-table, memory, CPU load and open-file usage with colored bars, plus a rough "room for N more users" estimate.
+
+### Changed
+
+- Re-running the MSS fix replaces the old rule (live, UFW before.rules and boot unit) instead of stacking another.
+
 ## [2.7.1] — 2026-10-25
 
 ### Fixed

@@ -2,33 +2,81 @@
 # ============================================================================
 # modules/vpn.sh — VPN-aware non-sysctl fixes.
 #
-# MSS clamping is the most common fix for "WireGuard connects but pages
+# Smart MTU/MSS: measures the real path MTU, then clamps MSS to it. A clamp is
+# the most common fix for "WireGuard connects but pages
 # don't load" behind NAT. Persistence uses a systemd ONESHOT unit: it runs
 # once at boot and exits — no resident process, zero-footprint compliant.
 # ============================================================================
 
 readonly ST_MSS_UNIT='/etc/systemd/system/server-tools-mss.service'
-# The comma in SYN,RST is iptables syntax, not an array-separator mistake.
-# shellcheck disable=SC2054
-readonly -a ST_MSS_RULE=(
-  FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-)
+readonly ST_MSS_UFW_MARK='# --- server-tools MSS clamping'
+
+# _mss_rule FAMILY — the TCPMSS rule words for this host. A configured
+# mss_value (measured path MTU − headers) wins over --clamp-mss-to-pmtu, which
+# only knows the INTERFACE mtu and so does nothing when the real bottleneck is
+# further along the path (tunnels, provider overlay, PPPoE).
+# FAMILY is 4 or 6; the headers are 40 and 60 bytes. The value stored in
+# config is the IPv4 MSS, so IPv6 subtracts 20 more.
+_mss_rule() {
+  local family="$1" value
+  value="$(config_get mss_value 0)"
+  [[ $value =~ ^[0-9]+$ ]] || value=0
+  if ((value > 0)); then
+    ((family == 6)) && value=$((value - 20))
+    printf '%s\n' FORWARD -p tcp --tcp-flags 'SYN,RST' SYN -j TCPMSS --set-mss "$value"
+  else
+    printf '%s\n' FORWARD -p tcp --tcp-flags 'SYN,RST' SYN -j TCPMSS --clamp-mss-to-pmtu
+  fi
+}
+
+# _mss_rule_words FAMILY — the rule as one space-joined string.
+_mss_rule_words() {
+  local -a words
+  mapfile -t words < <(_mss_rule "$1")
+  join_sp "${words[@]}"
+}
+
+# _mss_remove_live TOOL — delete every TCPMSS rule in FORWARD so a changed
+# value replaces the old rule instead of stacking beside it.
+_mss_remove_live() {
+  local tool="$1" rule
+  while IFS= read -r rule; do
+    [[ $rule == -A\ FORWARD* ]] || continue
+    # shellcheck disable=SC2086 # rule words are iptables syntax by design
+    "$tool" -t mangle ${rule/-A /-D } 2>>"$ST_LOG_FILE" ||
+      log_warn "Could not remove an old MSS rule from ${tool}."
+  done < <("$tool" -t mangle -S FORWARD 2>/dev/null | grep -- '-j TCPMSS' || true) # no match is normal
+}
+
+# _mss_ufw_strip — remove our managed block from before.rules.
+_mss_ufw_strip() {
+  local rules="$1" tmp="${1}.st-tmp"
+  awk -v mark="$ST_MSS_UFW_MARK" '
+    index($0, mark) == 1 {skip = 1}
+    skip {if ($0 == "COMMIT") {skip = 0}; next}
+    {print}
+  ' "$rules" >"$tmp" && cat "$tmp" >"$rules"
+  rm -f "$tmp"
+}
 
 # _vpn_mss_ufw_persist — add the clamp to UFW's before.rules so `ufw reload`
 # keeps it. The file is tracked first and restored if UFW refuses to reload.
 _vpn_mss_ufw_persist() {
-  local rules='/etc/ufw/before.rules'
+  local rules='/etc/ufw/before.rules' rule
   has_cmd ufw || return 2
   [[ -f $rules ]] || return 2
-  grep -q 'server-tools MSS' "$rules" 2>/dev/null && return 0 # idempotent
+  rule="$(_mss_rule_words 4)"
+  # Idempotent: the same rule already in place means nothing to do.
+  grep -qF -- "-A ${rule}" "$rules" 2>/dev/null && return 0
 
   st_track_file "$rules"
-  cat >>"$rules" <<'EOF'
+  _mss_ufw_strip "$rules"
+  cat >>"$rules" <<EOF
 
-# --- server-tools MSS clamping (managed block, safe to remove as a whole)
+${ST_MSS_UFW_MARK} (managed block, safe to remove as a whole)
 *mangle
 :FORWARD - [0:0]
--A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+-A ${rule}
 COMMIT
 EOF
 
@@ -43,27 +91,121 @@ EOF
   return 0
 }
 
+# --- Path MTU measurement ---------------------------------------------------
+
+# Public anycast resolvers answer ICMP everywhere and sit behind the same
+# international path real users' traffic takes.
+readonly -a ST_PMTU_TARGETS=(1.1.1.1 8.8.8.8)
+
+# _pmtu_probe TARGET — largest IPv4 packet that crosses unfragmented, found by
+# binary search with DF-flagged pings. Prints nothing and fails when the target
+# does not answer a small ping or the ping tool lacks -M do.
+_pmtu_probe() {
+  local target="$1" lo=1200 hi=1500 mid
+  has_cmd ping || return 1
+  ping -c1 -W2 -s 56 "$target" >/dev/null 2>&1 || return 1
+  ping -M do -c1 -W1 -s $((lo - 28)) "$target" >/dev/null 2>&1 || return 1
+  while ((lo < hi)); do
+    mid=$(((lo + hi + 1) / 2))
+    if ping -M do -c1 -W1 -s $((mid - 28)) "$target" >/dev/null 2>&1; then
+      lo=$mid
+    else
+      hi=$((mid - 1))
+    fi
+  done
+  printf '%s' "$lo"
+}
+
+# Lowest measured path MTU (0 = unknown) and the default interface's MTU.
+ST_PMTU=0
+ST_IFACE_MTU=0
+
+# vpn_measure_mtu — fill ST_PMTU and ST_IFACE_MTU and print the evidence.
+vpn_measure_mtu() {
+  ST_PMTU=0
+  ST_IFACE_MTU=0
+  local iface target value
+  iface="$(net_default_iface)" || iface=''
+  if [[ -n $iface ]] && has_cmd ip; then
+    ST_IFACE_MTU="$(ip -o link show dev "$iface" 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "mtu") {print $(i + 1); exit}}')"
+    [[ $ST_IFACE_MTU =~ ^[0-9]+$ ]] || ST_IFACE_MTU=0
+  fi
+  printf 'Interface %s%s%s MTU: %s\n' "$C_KEY" "${iface:-?}" "$C_RESET" "$((ST_IFACE_MTU))"
+  for target in "${ST_PMTU_TARGETS[@]}"; do
+    if value="$(_pmtu_probe "$target")"; then
+      printf '  path to %-9s %s bytes\n' "$target" "$value"
+      if ((ST_PMTU == 0 || value < ST_PMTU)); then
+        ST_PMTU="$value"
+      fi
+    else
+      printf '  path to %-9s %sno answer%s\n' "$target" "$C_MUTED" "$C_RESET"
+    fi
+  done
+  return 0
+}
+
+# _wg_mtu_advice — compare each WireGuard interface with what the path allows.
+_wg_mtu_advice() {
+  has_cmd wg || return 0
+  ((ST_PMTU > 0)) || return 0
+  local wg_if mtu want
+  want=$((ST_PMTU - 80)) # 60 (IPv4) / 80 (IPv6) bytes of WireGuard overhead; use the safe one
+  for wg_if in $(wg show interfaces 2>/dev/null); do
+    mtu="$(ip -o link show dev "$wg_if" 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "mtu") {print $(i + 1); exit}}')"
+    [[ $mtu =~ ^[0-9]+$ ]] || continue
+    if ((mtu > want)); then
+      printf '  %s  %s has MTU %s but this path carries at most %s — set "MTU = %s" in its config\n' \
+        "$(ui_badge warn)" "$wg_if" "$mtu" "$want" "$want"
+    else
+      printf '  %s  %s MTU %s fits the path\n' "$(ui_badge ok)" "$wg_if" "$mtu"
+    fi
+  done
+}
+
 vpn_mss_clamp() {
-  local rc_ufw=0
-  ui_section "MSS clamping (TCP over tunnels/NAT)"
-  printf 'Clamps TCP MSS to the path MTU on forwarded traffic. Fixes the classic\n'
-  printf '"VPN connects but sites do not load" symptom (WireGuard, tunnels, NAT).\n'
+  local rc_ufw=0 tool mss=0
+  ui_section "Smart MTU / MSS (TCP over tunnels/NAT)"
+  printf 'Measures the real path MTU toward the internet, then clamps TCP MSS to what\n'
+  printf 'actually fits. Fixes "VPN connects but sites do not load" and the slow,\n'
+  printf 'stalling pages that come from silent packet fragmentation.\n\n'
   if ! has_cmd iptables; then
     log_error "iptables not available — cannot apply MSS clamping."
     return 0
   fi
-  ui_confirm "Apply MSS clamping now?" || return 0
 
-  if ! iptables -t mangle -C "${ST_MSS_RULE[@]}" 2>/dev/null; then
-    if ! iptables -t mangle -A "${ST_MSS_RULE[@]}" 2>>"$ST_LOG_FILE"; then
-      log_error "Could not add the IPv4 MSS rule — see the log."
-      return 0
+  vpn_measure_mtu
+  if ((ST_PMTU > 0 && ST_IFACE_MTU > 0 && ST_PMTU < ST_IFACE_MTU)); then
+    mss=$((ST_PMTU - 40))
+    printf '\n%sThe path is narrower than the interface%s (%s < %s): fixed MSS %s is the right fix.\n' \
+      "$C_WARN" "$C_RESET" "$ST_PMTU" "$ST_IFACE_MTU" "$mss"
+  elif ((ST_PMTU > 0)); then
+    printf '\n%sThe path carries the full interface MTU.%s Automatic clamping to the route MTU is enough.\n' \
+      "$C_OK" "$C_RESET"
+  else
+    printf '\n%sCould not measure the path%s (ICMP filtered or no connectivity) — using automatic clamping.\n' \
+      "$C_WARN" "$C_RESET"
+  fi
+  _wg_mtu_advice
+  ui_confirm_yes "Apply MSS clamping now?" || return 0
+
+  config_set mss_value "$mss"
+  for tool in iptables ip6tables; do
+    has_cmd "$tool" || continue
+    _mss_remove_live "$tool"
+    local -a rule
+    if [[ $tool == iptables ]]; then
+      mapfile -t rule < <(_mss_rule 4)
+    else
+      mapfile -t rule < <(_mss_rule 6)
     fi
-  fi
-  if has_cmd ip6tables && ! ip6tables -t mangle -C "${ST_MSS_RULE[@]}" 2>/dev/null; then
-    ip6tables -t mangle -A "${ST_MSS_RULE[@]}" 2>>"$ST_LOG_FILE" ||
+    if ! "$tool" -t mangle -A "${rule[@]}" 2>>"$ST_LOG_FILE"; then
+      if [[ $tool == iptables ]]; then
+        log_error "Could not add the IPv4 MSS rule — see the log."
+        return 0
+      fi
       log_warn "IPv6 MSS rule failed (IPv6 clamping skipped)."
-  fi
+    fi
+  done
 
   # UFW rebuilds the whole ruleset on `ufw reload` and at boot, wiping rules
   # added with plain iptables. When UFW owns the firewall, the clamp belongs
@@ -71,19 +213,16 @@ vpn_mss_clamp() {
   _vpn_mss_ufw_persist || rc_ufw=$?
 
   if [[ -d /etc/systemd/system ]] && has_cmd systemctl; then
-    local ipt ip6t mss_rule
+    local ipt ip6t
     ipt="$(command -v iptables)"
     ip6t="$(command -v ip6tables)" || ip6t=''
-    # join_sp, not "${arr[*]}": the global IFS joins with newlines, which split
-    # this ExecStart= across nine lines and left an unloadable unit behind.
-    mss_rule="$(join_sp "${ST_MSS_RULE[@]}")"
     st_track_file "$ST_MSS_UNIT"
     {
       printf '# Generated by %s v%s\n' "$ST_NAME" "$ST_VERSION"
       printf '[Unit]\nDescription=ServerTools MSS clamping (oneshot, exits after boot)\nAfter=network-pre.target\nWants=network-pre.target\n\n'
       printf '[Service]\nType=oneshot\nRemainAfterExit=yes\n'
-      printf 'ExecStart=%s -t mangle -A %s\n' "$ipt" "$mss_rule"
-      [[ -n $ip6t ]] && printf 'ExecStart=%s -t mangle -A %s\n' "$ip6t" "$mss_rule"
+      printf 'ExecStart=%s -t mangle -A %s\n' "$ipt" "$(_mss_rule_words 4)"
+      [[ -n $ip6t ]] && printf 'ExecStart=%s -t mangle -A %s\n' "$ip6t" "$(_mss_rule_words 6)"
       printf '\n[Install]\nWantedBy=multi-user.target\n'
     } >"$ST_MSS_UNIT"
     systemctl daemon-reload 2>>"$ST_LOG_FILE" || log_warn "daemon-reload failed."
@@ -103,13 +242,15 @@ vpn_mss_clamp() {
     printf '%sMSS clamping active%s (persisted via oneshot unit — nothing stays running).\n' \
       "$C_OK" "$C_RESET"
   fi
-  log_info "MSS clamping applied (ufw persistence rc=${rc_ufw})."
+  log_info "MSS clamping applied (mss_value=${mss}, ufw persistence rc=${rc_ufw})."
 }
 
 # mss_verify — 0 when the clamp rule is present in the live mangle table.
 mss_verify() {
   has_cmd iptables || return 2
-  iptables -t mangle -C "${ST_MSS_RULE[@]}" 2>/dev/null && return 0
+  local -a rule
+  mapfile -t rule < <(_mss_rule 4)
+  iptables -t mangle -C "${rule[@]}" 2>/dev/null && return 0
   # Only report drift when we were actually asked to set it up.
   [[ -f $ST_MSS_UNIT ]] && return 3
   return 2

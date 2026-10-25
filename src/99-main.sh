@@ -15,6 +15,8 @@ Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
   go                    One key: detect, optimize, show health — no questions
                         (accepts --users / --qdisc / --dns / --profile)
+  boost                 Re-apply proxy priority to running services/containers
+                        (also run at boot by a oneshot unit)
   --auto                Non-interactive optimize: base layer + detected profile
   --dry-run             Show the plan and exact sysctl diff, apply NOTHING
   --verify              Check whether everything applied is still in effect
@@ -37,6 +39,7 @@ Options for --auto and --dry-run:
   --no-limits           Skip the nofile limits step
   --no-extras           Skip the journald/NTP step
   --no-perf             Skip the CPU/NIC performance step (RPS, governor, THP)
+  --no-priority         Skip the proxy priority step (nice / OOM shield / CPU weight)
 
 General options:
   --json                Machine-readable output (--verify)
@@ -79,6 +82,7 @@ main() {
       --rollback-original) action="rollback_original" ;;
       --auto) action="auto" ;;
       go | --go) action="go" ;;
+      boost | --boost) action="boost" ;;
       --dry-run) action="dryrun" ;;
       --verify | --doctor) action="verify" ;;
       --report) action="report" ;;
@@ -130,6 +134,10 @@ main() {
         ST_AUTO_EXTRAS=0
         tuning_opts='yes'
         ;;
+      --no-priority)
+        ST_AUTO_PRIO=0
+        tuning_opts='yes'
+        ;;
       --no-perf)
         ST_AUTO_PERF=0
         tuning_opts='yes'
@@ -177,6 +185,10 @@ main() {
     auto)
       ST_OPT_BATCH=1
       auto_optimize
+      ;;
+    boost)
+      ST_OPT_BATCH=1
+      priority_boot || st_escalate_exit $?
       ;;
     go)
       ST_OPT_BATCH=1

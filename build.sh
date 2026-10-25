@@ -31,6 +31,7 @@ SOURCES=(
   modules/perf.sh
   modules/security.sh
   modules/vpn.sh
+  modules/priority.sh
   modules/ipv6.sh
   modules/installer.sh
   modules/tools.sh

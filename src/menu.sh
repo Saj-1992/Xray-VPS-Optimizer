@@ -27,6 +27,7 @@ menu_dashboard() {
   _dash_row "Machine" "$(cpu_cores) vCPU · $(mem_total_mb) MB RAM · up $(uptime_pretty)"
   _dash_row "Network" "$(net_public_ip4) · cc=$(sysctl_get net.ipv4.tcp_congestion_control) · $(sysctl_get net.core.default_qdisc)"
   _dash_row "Workload" "$(detect_summary) · ${status}"
+  _dash_row "Headroom" "$(headroom_line)"
   local score newv
   score="$(config_get last_score '')"
   if [[ -n $score ]]; then

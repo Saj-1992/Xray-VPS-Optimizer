@@ -629,7 +629,8 @@ tools_menu() {
     ui_menu_item b "Quick benchmark" "CPU and disk"
     ui_menu_item w "Live view" "traffic · sockets · conntrack"
     ui_menu_group "Network"
-    ui_menu_item 5 "MSS clamping" "fix 'connects but no sites'"
+    ui_menu_item 5 "Smart MTU / MSS" "measure the path, fix 'connects but no sites'"
+    ui_menu_item p "Proxy priority" "CPU + OOM priority for Xray · Docker nodes"
     ui_menu_item n "Conntrack NOTRACK" "exempt proxy ports (Xray/Reality)"
     ui_menu_item i "IPv6 control" "disable/enable the IPv6 stack"
     ui_menu_item 6 "Docker + UFW audit" "check the firewall bypass"
@@ -662,6 +663,10 @@ tools_menu() {
         ;;
       n | N)
         vpn_conntrack_bypass
+        ui_pause
+        ;;
+      p | P)
+        priority_menu
         ui_pause
         ;;
       i | I)

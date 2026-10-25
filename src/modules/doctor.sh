@@ -19,7 +19,8 @@ readonly -a ST_DOCTOR_CHECKS=(
   'File limits (nofile)|limits_verify|re-run Quick Optimize'
   'Swap|swap_verify|Custom Optimize, enable the swap step'
   'SSH hardening|ssh_verify|Security menu, option 3'
-  'MSS clamping|mss_verify|Network tools, option 5'
+  'Proxy priority|priority_verify|Tools, option p'
+  'MSS clamping|mss_verify|Tools, option 5 (Smart MTU/MSS)'
   'Conntrack NOTRACK|notrack_verify|Network tools, option n'
   'IPv6 disabled|ipv6_verify|Network tools, IPv6 control — disable again'
 )
