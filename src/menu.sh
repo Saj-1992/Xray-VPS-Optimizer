@@ -107,7 +107,7 @@ main_menu() {
     ui_menu_item 5 "Rollback" "undo changes safely"
     ui_menu_item 6 "Security" "UFW · fail2ban · SSH"
     ui_menu_item 7 "Network & VPN Tools" "ping · speed · MSS · NOTRACK"
-    ui_menu_item 8 "Node & Docker" "backups · installers · limits"
+    ui_menu_item 8 "Node & Docker" "backups · limits"
     ui_menu_group "System"
     ui_menu_item 9 "Settings" "install · update · paths"
     ui_menu_item 0 "Exit"

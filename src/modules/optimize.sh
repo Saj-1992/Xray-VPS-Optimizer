@@ -291,11 +291,11 @@ quick_optimize() {
 _apply_cli_profile_tier() {
   if [[ -n $ST_AUTO_PROFILE ]]; then
     case "$ST_AUTO_PROFILE" in
-      general | vpn-node | wireguard | panel | full)
+      general | vpn-node | wireguard | panel | accounting | full)
         ST_PROFILE="$ST_AUTO_PROFILE"
         ST_PROFILE_SOURCE='cli'
         ;;
-      *) die "Invalid --profile '${ST_AUTO_PROFILE}' (general|vpn-node|wireguard|panel|full)." ;;
+      *) die "Invalid --profile '${ST_AUTO_PROFILE}' (general|vpn-node|wireguard|panel|accounting|full)." ;;
     esac
   else
     profile_resolve_auto
@@ -363,6 +363,7 @@ custom_optimize() {
   ui_menu_item 3 "wireguard" "WireGuard host"
   ui_menu_item 4 "panel" "Marzban/Pasarguard panel host"
   ui_menu_item 5 "full" "everything with best-practice defaults"
+  ui_menu_item 6 "accounting" "VPN accounting server (many users, forwarding)"
   local choice
   read -rp "Select [Enter=suggested]: " choice || return 0
   case "${choice:-}" in
@@ -371,6 +372,7 @@ custom_optimize() {
     3) ST_PROFILE='wireguard' ;;
     4) ST_PROFILE='panel' ;;
     5) ST_PROFILE='full' ;;
+    6) ST_PROFILE='accounting' ;;
     *) ST_PROFILE="$suggested" ;;
   esac
   ST_PROFILE_SOURCE='manual'
@@ -391,6 +393,13 @@ custom_optimize() {
     config_set expected_users "$users_in"
   fi
   capacity_apply_users
+
+  local qd_in
+  read -rp "Queue discipline with BBR [fq / fq_codel / cake, Enter=$(config_get qdisc auto)]: " qd_in || qd_in=''
+  case "${qd_in,,}" in
+    fq | fq_codel | cake) config_set qdisc "${qd_in,,}" ;;
+    auto) config_set qdisc auto ;;
+  esac
 
   ui_hr
   _optimize_show_plan

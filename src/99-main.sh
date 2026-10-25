@@ -23,10 +23,12 @@ Actions (no action starts the interactive menu):
   --update              Self-update from the latest GitHub release
 
 Options for --auto and --dry-run:
-  --profile NAME        general | vpn-node | wireguard | panel | full
+  --profile NAME        general | vpn-node | wireguard | panel | accounting | full
   --tier T              Capacity tier: S | M | L | XL (default: by RAM)
   --users N             Expected concurrent users — sizes conntrack from the
                         real user count instead of RAM (with a RAM warning)
+  --qdisc NAME          Queue discipline paired with BBR: fq | fq_codel | cake
+                        (default fq; cake = best fairness for many users)
   --dns VALUE           Provider (cloudflare|google|quad9|opendns|shecan|
                         electro|begzar) or custom "primary,secondary"
   --no-swap             Skip the swap step
@@ -101,6 +103,16 @@ main() {
         _need_value "$1" "${2:-}"
         shift
         ST_AUTO_DNS="$1"
+        tuning_opts='yes'
+        ;;
+      --qdisc)
+        _need_value "$1" "${2:-}"
+        shift
+        ST_AUTO_QDISC="${1,,}"
+        case "$ST_AUTO_QDISC" in
+          fq | fq_codel | cake) ;;
+          *) die "Invalid --qdisc '$1' (fq|fq_codel|cake)." ;;
+        esac
         tuning_opts='yes'
         ;;
       --no-swap)

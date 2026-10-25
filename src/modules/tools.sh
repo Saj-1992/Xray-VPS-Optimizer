@@ -634,8 +634,6 @@ tools_menu() {
     ui_menu_item i "IPv6 control" "disable/enable the IPv6 stack"
     ui_menu_item 6 "Docker + UFW audit" "check the firewall bypass"
     ui_menu_group "System"
-    ui_menu_item 8 "XanMod kernel" "BBRv3 — replaces the kernel"
-    ui_menu_item m "APT mirror" "switch to an Iranian mirror"
     ui_menu_item 7 "Support report" "full plain-text dump"
     ui_menu_item 0 "Back"
     read -rp "$(_ui_prompt)" choice || return 0
@@ -676,10 +674,6 @@ tools_menu() {
         tools_report
         ui_pause
         ;;
-      8)
-        kernel_xanmod_install
-        ui_pause
-        ;;
       9)
         tools_speedtest || true # outcome already reported
         ui_pause
@@ -689,10 +683,6 @@ tools_menu() {
         ui_pause
         ;;
       w | W) tools_watch || true ;;
-      m | M)
-        mirror_apply || true
-        ui_pause
-        ;;
       0) return 0 ;;
       *)
         printf '%sInvalid choice.%s\n' "$C_ERR" "$C_RESET"

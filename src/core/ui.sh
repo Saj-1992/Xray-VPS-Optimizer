@@ -116,7 +116,7 @@ ui_logo() {
  |____/ \___|_|    \_/ \___|_|   |_|\___/ \___/|_|___/
 LOGO
   printf '%s' "$C_RESET"
-  ui_center "Linux server optimization · zero runtime footprint · by @UnknownZero" "$C_MUTED"
+  ui_center "Linux server optimization · zero runtime footprint · by Saj-1992" "$C_MUTED"
   ui_center "v${ST_VERSION}" "$C_ACCENT"
   ui_hr_heavy
 }

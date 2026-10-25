@@ -214,104 +214,6 @@ ssh_verify() {
   return 0
 }
 
-# --- Anti-abuse profile ---------------------------------------------------
-# Datacenter abuse reports about VPN nodes are almost always one of: outbound
-# spam, scanning of the provider's internal ranges, or worm ports. These are
-# egress rules, which only cover traffic the host itself emits — that is
-# exactly how userspace proxies (Xray/sing-box) send user traffic. Forwarded
-# traffic (WireGuard) needs `ufw route` rules, so that case is stated openly.
-
-# Ports whose outbound use triggers abuse complaints. 465/587 are optional:
-# blocking them stops authenticated spam but also breaks real mail clients.
-readonly -a ST_ABUSE_PORTS_TCP=(25 23 445 135 139)
-readonly -a ST_ABUSE_RANGES=(
-  '10.0.0.0/8' '172.16.0.0/12' '192.168.0.0/16' '100.64.0.0/10' '169.254.0.0/16'
-)
-
-security_antiabuse() {
-  ui_section "Anti-abuse egress profile"
-  if ! has_cmd ufw; then
-    log_error "UFW is not installed — set it up first (menu option 1)."
-    return 2
-  fi
-
-  printf 'Blocks the outbound traffic that datacenters complain about:\n'
-  printf '  · SMTP (25) and worm ports (23, 135, 139, 445) — spam and scanning\n'
-  printf '  · RFC1918/CGNAT ranges — stops users reaching the provider network\n'
-  printf 'Your own subnet stays reachable so the server keeps working.\n'
-  if has_cmd wg && [[ -n "$(wg show interfaces 2>/dev/null)" ]]; then
-    printf '%sNote:%s WireGuard traffic is FORWARDED, not emitted by the host, so\n' "$C_WARN" "$C_RESET"
-    printf 'these egress rules do not restrict WireGuard peers.\n'
-  fi
-  ui_confirm "Apply the anti-abuse rules?" || return 2
-
-  local rc=0 port range gw_net
-  for port in "${ST_ABUSE_PORTS_TCP[@]}"; do
-    ufw deny out to any port "$port" proto tcp >/dev/null 2>>"$ST_LOG_FILE" ||
-      {
-        log_warn "Could not add the egress deny rule for tcp/${port}."
-        rc=3
-      }
-  done
-  ufw deny out to any port 137:139 proto udp >/dev/null 2>>"$ST_LOG_FILE" ||
-    {
-      log_warn "Could not add the NetBIOS egress deny rule."
-      rc=3
-    }
-
-  if ui_confirm "Also block submission ports 465/587? (stops authenticated spam, breaks real mail clients)"; then
-    for port in 465 587; do
-      ufw deny out to any port "$port" proto tcp >/dev/null 2>>"$ST_LOG_FILE" ||
-        {
-          log_warn "Could not add the egress deny rule for tcp/${port}."
-          rc=3
-        }
-    done
-  fi
-
-  # The provider's own subnet must stay allowed, and the allow rule has to be
-  # inserted BEFORE the deny rules to win.
-  gw_net="$(_abuse_local_subnet)" || gw_net=''
-  if [[ -n $gw_net ]]; then
-    printf 'Keeping the local subnet %s reachable.\n' "$gw_net"
-    ufw insert 1 allow out to "$gw_net" >/dev/null 2>>"$ST_LOG_FILE" ||
-      {
-        log_warn "Could not allow the local subnet ${gw_net} — private ranges left untouched."
-        return 3
-      }
-  fi
-  for range in "${ST_ABUSE_RANGES[@]}"; do
-    ufw deny out to "$range" >/dev/null 2>>"$ST_LOG_FILE" ||
-      {
-        log_warn "Could not add the egress deny rule for ${range}."
-        rc=3
-      }
-  done
-
-  # Brute-force rate limiting costs nothing and replaces a plain allow.
-  local ssh_port
-  ssh_port="$(detect_ssh_port)"
-  ufw limit "${ssh_port}/tcp" >/dev/null 2>>"$ST_LOG_FILE" ||
-    log_warn "Could not switch SSH to a rate-limited rule."
-
-  printf '%sAnti-abuse rules applied.%s Review them with: ufw status numbered\n' "$C_OK" "$C_RESET"
-  printf '%sProxy-level blocking (private ranges, BitTorrent) still belongs in\n' "$C_MUTED"
-  printf 'the Xray/sing-box routing config — see docs/GUIDE.md.%s\n' "$C_RESET"
-  log_info "Anti-abuse egress profile applied (rc=${rc})."
-  return "$rc"
-}
-
-# _abuse_local_subnet — the CIDR the default gateway lives in, so blocking
-# private ranges never cuts off the provider's own network.
-_abuse_local_subnet() {
-  local iface out
-  has_cmd ip || return 0
-  iface="$(net_default_iface)" || return 0
-  [[ -n $iface ]] || return 0
-  out="$(ip -o -4 addr show dev "$iface" scope global 2>/dev/null)" || return 0
-  awk 'NR == 1 {split($4, a, "/"); split(a[1], o, "."); print o[1] "." o[2] "." o[3] ".0/" a[2]}' <<<"$out"
-}
-
 # security_node_ports — a node's API port only ever talks to its panel.
 security_node_api() {
   ui_section "Restrict node API ports to the panel"
@@ -357,8 +259,7 @@ security_menu() {
     ui_menu_item 1 "UFW firewall" "SSH-safe setup, extra ports, Docker warning"
     ui_menu_item 2 "fail2ban" "SSH brute-force bans (resident service ~20 MB)"
     ui_menu_item 3 "SSH hardening" "UseDNS off, optional key-only login (validated)"
-    ui_menu_item 4 "Anti-abuse egress" "block SMTP/worm ports and provider networks"
-    ui_menu_item 5 "Restrict node API" "panel-only access to 62050/62051"
+    ui_menu_item 4 "Restrict node API" "panel-only access to 62050/62051"
     ui_menu_item 0 "Back"
     read -rp "$(_ui_prompt)" choice || return 0
     case "${choice:-}" in
@@ -375,10 +276,6 @@ security_menu() {
         ui_pause
         ;;
       4)
-        security_antiabuse || true
-        ui_pause
-        ;;
-      5)
         security_node_api || true
         ui_pause
         ;;

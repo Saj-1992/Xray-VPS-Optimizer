@@ -12,6 +12,7 @@ readonly ST_MODPROBE_FILE='/etc/modprobe.d/server-tools.conf'
 
 ST_CC='cubic'
 ST_QDISC='fq_codel'
+ST_AUTO_QDISC='' # --qdisc: fq | fq_codel | cake (empty = config / auto)
 
 # sysctl_detect_bbr — pick congestion control and queueing discipline.
 # The qdisc is probed for real (see qdisc_supported) instead of assumed, and
@@ -39,7 +40,7 @@ sysctl_detect_bbr() {
   fi
 
   local wanted
-  wanted="$(config_get qdisc auto)"
+  wanted="${ST_AUTO_QDISC:-$(config_get qdisc auto)}"
   if [[ $wanted != auto ]]; then
     if qdisc_supported "$wanted"; then
       ST_QDISC="$wanted"

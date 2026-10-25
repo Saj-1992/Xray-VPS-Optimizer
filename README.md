@@ -15,13 +15,13 @@
 اجرای مستقیم:
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh)
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh)
 ```
 
 نصب به‌عنوان دستور `st` (پیشنهادی):
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh) --install
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh) --install
 ```
 
 از این پس فقط `st` را اجرا کنید؛ آپدیت هم با `st --update`.
@@ -50,7 +50,7 @@ workload سرور را خودکار تشخیص می‌دهد و این لایه�
 | **Optimize** | Quick (خودکار، پیشنهادی) و Custom (انتخاب دستی پروفایل و ماژول‌ها) |
 | **Inspect** | System Status کامل · Doctor برای بررسی drift (آیا هنوز اعمال است؟) |
 | **Recover** | Rollback آخرین اجرا یا بازگشت کامل به وضعیت اولیه |
-| **Secure** | UFW · fail2ban · سخت‌سازی SSH · anti-abuse · محدودسازی API نود |
+| **Secure** | UFW · fail2ban · سخت‌سازی SSH · محدودسازی API نود |
 | **Tools** | پینگ · **اسپیدتست با انتخاب سرور/لوکیشن (Ookla یا HTTP)** · بنچمارک · MSS · **NOTRACK** · **غیرفعال‌سازی کامل IPv6** · Live view · میرور APT · گزارش |
 | **Node & Docker** | بکاپ کانفیگ نود · نصب رسمی نودها · سقف فایل کانتینرها |
 
@@ -128,7 +128,7 @@ make lint         # shellcheck + shfmt
 
 ## 👤 سازنده
 
-- سازنده: **UnknownZero** — تلگرام: **@UnknownZero**
+- سازنده: **Saj-1992** (فورک از Sir-Adnan/server-tools، نویسنده‌ی اصلی UnknownZero)
 - مجوز: [MIT](LICENSE)
 
 *English documentation: [README_en.md](README_en.md)*

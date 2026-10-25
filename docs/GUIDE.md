@@ -24,13 +24,13 @@
 اجرای مستقیم اسکریپت:
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh)
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh)
 ```
 
 نصب به‌عنوان دستور کوتاه `st` (پیشنهادی):
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh) --install
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh) --install
 ```
 
 از این به بعد کافی است تایپ کنید `st` — و برای آپدیت: `st --update` 🔄
@@ -122,7 +122,6 @@ st --verify --json # برای اسکریپت و مانیتورینگ
 - فایروال **UFW** 🧱: پورت SSH خودکار تشخیص و **قبل از هر قانون deny** باز می‌شود (ضد قفل‌شدن)؛ بعد پورت‌های دلخواه (مثل `443/tcp`) را می‌دهید و فعال می‌کنید. اگر Docker فعال باشد، هشدار می‌گیرید که پورت‌های publish شده از UFW عبور می‌کنند.
 - محافظ **fail2ban** 🛡️: جلوگیری از brute-force روی SSH — تنها سرویس دائمی کل پروژه (~۲۰ مگابایت RAM) و فقط با رضایت صریح شما نصب می‌شود.
 - سخت‌سازی **SSH** 🔑: خاموش‌کردن ورود با پسورد **فقط وقتی کلید SSH دارید** — و config قبل از ری‌استارت با `sshd -t` اعتبارسنجی می‌شود تا پشت در نمانید.
-- پروفایل **ضدabuse** 🚫: بستن SMTP و پورت‌های کرم‌خیز خروجی و رنج‌های خصوصی دیتاسنتر — جلوگیری از گزارش abuse (شبکه‌ی خود سرور باز می‌ماند).
 - محدودسازی **پورت API نود** 🎯: پورت‌های 62050/62051 فقط از IP پنل قابل دسترس شوند.
 
 ## 🧪 ۱۲) ابزارهای شبکه — گزینه ۷
@@ -131,10 +130,8 @@ st --verify --json # برای اسکریپت و مانیتورینگ
 - تست سرعت DNS ⏱️: زمان واقعی پاسخ هر سرویس (با کوئری واقعی dig).
 - کلمپ MSS 🩹: درمان مشکل کلاسیک «وایرگارد وصل می‌شود ولی سایت باز نمی‌شود».
 - بازرسی Docker+UFW 🐳: نمایش پورت‌هایی که از فایروال عبور می‌کنند.
-- کرنل XanMod با BBRv3 🚀: پیشرفته — کرنل را عوض می‌کند! فقط اگر می‌دانید چه می‌کنید و به کنسول ریکاوری provider دسترسی دارید.
 - تست پهنای باند و بنچمارک ⚡: speedtest یا دانلود HTTP بدون نیاز به نصب چیزی + سنجش سریع CPU و دیسک.
 - نمای زنده 📺: نمایش لحظه‌ای conntrack، سوکت‌ها و ترافیک زیر بار (با q خارج می‌شوید).
-- تعویض mirror اپت 🇮🇷: برای سرورهای داخل ایران، `apt` را چند برابر سریع‌تر می‌کند (و در صورت خطا خودکار برمی‌گردد).
 
 ## 🐳 ۱۳) نود و داکر — گزینه ۸
 
@@ -164,4 +161,4 @@ st --rollback-original   # بازگشت کامل به وضعیت قبل از ا�
 | مسیر لاگ 🗒️ | فایل `/var/log/server-tools.log` |
 | به‌هم‌ریختگی رنگ خروجی 🎨 | اجرای `st --no-color` یا متغیر `NO_COLOR=1` |
 
-سوالات بیشتر در [FAQ فارسی](FAQ.md) · گزارش باگ در [GitHub Issues](https://github.com/Sir-Adnan/server-tools/issues) — خروجی `st --report` را ضمیمه کنید. 🙏
+سوالات بیشتر در [FAQ فارسی](FAQ.md) · گزارش باگ در [GitHub Issues](https://github.com/Saj-1992/Xray-VPS-Optimizer/issues) — خروجی `st --report` را ضمیمه کنید. 🙏

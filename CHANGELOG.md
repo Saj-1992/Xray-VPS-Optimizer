@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.5.0] — 2026-10-25
+
+### Added
+
+- `--qdisc fq|fq_codel|cake` (and a prompt in Custom Optimize) to choose the queue discipline paired with BBR. Falls back safely when the kernel lacks it.
+- `accounting` profile for VPN accounting servers (forwarding + user-based capacity).
+
+### Changed
+
+- Fork maintained at Saj-1992/Xray-VPS-Optimizer; self-update now points there.
+
+### Removed
+
+- Iranian APT mirror, XanMod kernel installer, anti-abuse egress profile and the upstream node installers (node config backup stays).
+
 ## [2.4.4] — 2026-07-24
 
 ### Fixed

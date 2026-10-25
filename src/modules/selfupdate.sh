@@ -9,9 +9,9 @@
 # ============================================================================
 
 readonly ST_INSTALL_PATH='/usr/local/bin/st'
-readonly ST_URL_RELEASE='https://github.com/Sir-Adnan/server-tools/releases/latest/download/server-tools.sh'
-readonly ST_URL_RELEASE_SUMS='https://github.com/Sir-Adnan/server-tools/releases/latest/download/SHA256SUMS'
-readonly ST_URL_RAW='https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh'
+readonly ST_URL_RELEASE='https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest/download/server-tools.sh'
+readonly ST_URL_RELEASE_SUMS='https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest/download/SHA256SUMS'
+readonly ST_URL_RAW='https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh'
 
 # _self_source_path — path of the running script, empty when running from a
 # pipe/process substitution (`bash <(curl ...)` yields a non-reusable /dev/fd).

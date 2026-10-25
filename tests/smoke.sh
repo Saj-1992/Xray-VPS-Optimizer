@@ -40,4 +40,9 @@ bash "$DIST" --help | grep -q -- '--auto' || fail "--help should document --auto
 bash "$DIST" --help | grep -q -- '--dry-run' || fail "--help should document --dry-run"
 bash "$DIST" --help | grep -q -- '--report' || fail "--help should document --report"
 
+if bash "$DIST" --auto --qdisc bogus >/dev/null 2>&1; then
+  fail "--qdisc with an invalid value should exit non-zero"
+fi
+bash "$DIST" --help | grep -q -- '--qdisc' || fail "--help should document --qdisc"
+
 printf 'smoke: OK (v%s)\n' "$VERSION"

@@ -37,7 +37,7 @@ sysctl و limits جزو خود کرنل هستند و سربار اجرایی ن
 اسکریپت‌های نسخه ۱ به پوشه `legacy/` منتقل و فریز شده‌اند. لینک جدید:
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/legacy/opt.sh)
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/legacy/opt.sh)
 ```
 
 ## روی چه توزیع‌هایی تست شده؟

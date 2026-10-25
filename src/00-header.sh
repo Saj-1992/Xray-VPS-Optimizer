@@ -15,7 +15,7 @@ fi
 
 readonly ST_NAME="ServerTools"
 readonly ST_VERSION="@VERSION@"
-readonly ST_REPO_URL="https://github.com/Sir-Adnan/server-tools"
+readonly ST_REPO_URL="https://github.com/Saj-1992/Xray-VPS-Optimizer"
 
 # Filesystem layout (FHS): config in /etc, state and backups in /var/lib,
 # log in /var/log. Nothing is ever written to /tmp (predictable names in

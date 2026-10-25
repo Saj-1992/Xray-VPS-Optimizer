@@ -15,13 +15,13 @@ and Hiddify — and for general-purpose tuning of any Linux server.
 Run directly:
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh)
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh)
 ```
 
 Install as the `st` command (recommended):
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Sir-Adnan/server-tools/main/dist/server-tools.sh) --install
+bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh) --install
 ```
 
 From then on just run `st`; update with `st --update`.
@@ -51,8 +51,8 @@ Everything is idempotent — re-running is safe and converges to the same state.
 | **Optimize** | Quick (automatic, recommended) and Custom (pick profile & modules) |
 | **Inspect** | Full System Status · Doctor drift check (is it still in effect?) |
 | **Recover** | Roll back the last run, or restore the original pre-tool state |
-| **Secure** | UFW · fail2ban · SSH hardening · anti-abuse · node-API restriction |
-| **Tools** | Ping · **speedtest with a server/location picker (Ookla or HTTP)** · benchmark · MSS · **NOTRACK** · **full IPv6 disable** · live view · APT mirror · report |
+| **Secure** | UFW · fail2ban · SSH hardening · node-API restriction |
+| **Tools** | Ping · **speedtest with a server/location picker (Ookla or HTTP)** · benchmark · MSS · **NOTRACK** · **full IPv6 disable** · live view · report |
 | **Node & Docker** | Node config backup · official node installers · container file limits |
 
 ## ✨ Design principles
@@ -91,6 +91,7 @@ Fleet example:
 
 ```bash
 st --auto --profile vpn-node --users 10000 --dns cloudflare
+      --qdisc fq|fq_codel|cake   (default fq)
 st --verify --json     # nightly drift check from your own automation
 ```
 
@@ -129,7 +130,7 @@ Engineering rules live in [CLAUDE.md](CLAUDE.md): no new dependencies, no bare
 
 ## 👤 Creator
 
-- Creator: **UnknownZero** — Telegram: **@UnknownZero**
+- Creator: **Saj-1992** (fork of Sir-Adnan/server-tools, originally by UnknownZero)**
 - License: [MIT](LICENSE)
 
 *مستندات فارسی: [README.md](README.md)*

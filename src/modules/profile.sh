@@ -34,7 +34,7 @@ profile_resolve_auto() {
 
 # profile_wants_forwarding — vpn workloads route user traffic.
 profile_wants_forwarding() {
-  [[ $ST_PROFILE == vpn-node || $ST_PROFILE == wireguard || $ST_PROFILE == full ]]
+  [[ $ST_PROFILE == vpn-node || $ST_PROFILE == wireguard || $ST_PROFILE == accounting || $ST_PROFILE == full ]]
 }
 
 tier_set() {
