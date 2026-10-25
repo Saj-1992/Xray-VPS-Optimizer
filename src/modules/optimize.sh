@@ -264,6 +264,14 @@ quick_optimize() {
   ui_title "Quick Optimize"
   detect_stack
   profile_resolve_auto
+
+  # One number replaces tier/conntrack jargon: everything is sized from it.
+  local users_in saved
+  saved="$(config_get expected_users 0)"
+  read -rp "How many users online at the same time? [Enter=${saved/#0/auto}]: " users_in || users_in=''
+  if [[ $users_in =~ ^[0-9]+$ ]]; then
+    config_set expected_users "$users_in"
+  fi
   tier_compute
 
   printf 'The base layer always optimizes the whole server; the detected profile\n'
@@ -378,15 +386,6 @@ custom_optimize() {
   ST_PROFILE_SOURCE='manual'
 
   tier_compute
-  local tier_choice
-  read -rp "Capacity tier — auto picked ${ST_TIER} (up to ${ST_TIER_USERS} users). Override [S/M/L/XL, Enter=keep]: " tier_choice || tier_choice=''
-  case "${tier_choice^^}" in
-    S | M | L | XL)
-      tier_set "${tier_choice^^}"
-      config_set capacity_tier "${tier_choice^^}"
-      ;;
-  esac
-
   local users_in
   read -rp "Expected concurrent users [Enter=size by RAM, 0=reset saved value]: " users_in || users_in=''
   if [[ $users_in =~ ^[0-9]+$ ]]; then

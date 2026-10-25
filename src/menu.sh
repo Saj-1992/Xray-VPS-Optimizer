@@ -27,6 +27,16 @@ menu_dashboard() {
   _dash_row "Machine" "$(cpu_cores) vCPU · $(mem_total_mb) MB RAM · up $(uptime_pretty)"
   _dash_row "Network" "$(net_public_ip4) · cc=$(sysctl_get net.ipv4.tcp_congestion_control) · $(sysctl_get net.core.default_qdisc)"
   _dash_row "Workload" "$(detect_summary) · ${status}"
+  local score newv
+  score="$(config_get last_score '')"
+  if [[ -n $score ]]; then
+    _dash_row "Health" "$(health_bar "$score")"
+  else
+    _dash_row "Health" "${C_MUTED}not measured yet — open Status & Health${C_RESET}"
+  fi
+  if newv="$(st_update_available)"; then
+    _dash_row "Update" "${C_WARN}v${newv} available${C_RESET} — press u"
+  fi
 }
 
 menu_rollback() {
@@ -91,49 +101,71 @@ menu_settings() {
   done
 }
 
+menu_optimize() {
+  local choice
+  while true; do
+    ui_logo
+    ui_title "Optimize"
+    ui_menu_item 1 "Quick" "asks your user count, then tunes everything · recommended"
+    ui_menu_item 2 "One key" "no questions at all (same as: st go)"
+    ui_menu_item 3 "Custom" "choose profile and modules"
+    ui_menu_item 0 "Back"
+    read -rp "$(_ui_prompt)" choice || return 0
+    case "${choice:-}" in
+      1) quick_optimize ;;
+      2)
+        ST_OPT_BATCH=1
+        go_optimize || true # per-step outcomes are already printed
+        ST_OPT_BATCH=0
+        ui_pause
+        ;;
+      3) custom_optimize ;;
+      0) return 0 ;;
+      *)
+        printf '%sInvalid choice.%s
+' "$C_ERR" "$C_RESET"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
 main_menu() {
   detect_stack
+  st_update_check
   local choice
   while true; do
     menu_dashboard
     ui_hr
-    ui_menu_group "Optimize"
-    ui_menu_item 1 "Quick Optimize" "auto-tune everything · recommended"
-    ui_menu_item 2 "Custom Optimize" "choose profile and modules"
-    ui_menu_group "Inspect"
-    ui_menu_item 3 "System Status" "full live report"
-    ui_menu_item 4 "Doctor" "drift check — still in effect?"
-    ui_menu_group "Manage"
+    ui_menu_item 1 "Optimize" "quick · one key · custom"
+    ui_menu_item 2 "Status & Health" "score, report, drift check"
+    ui_menu_item 3 "Security" "UFW · fail2ban · SSH"
+    ui_menu_item 4 "Tools" "ping · speed · MSS · NOTRACK · node · settings"
     ui_menu_item 5 "Rollback" "undo changes safely"
-    ui_menu_item 6 "Security" "UFW · fail2ban · SSH"
-    ui_menu_item 7 "Network & VPN Tools" "ping · speed · MSS · NOTRACK"
-    ui_menu_item 8 "Node & Docker" "backups · limits"
-    ui_menu_group "System"
-    ui_menu_item 9 "Settings" "install · update · paths"
     ui_menu_item 0 "Exit"
-    printf '\n'
-    ui_hint "New here? Press 1 — it detects your workload and tunes it safely."
+    printf '
+'
+    ui_hint "New here? Press 1 then 1 — it detects your workload and tunes it safely."
     # EOF (e.g. closed stdin) simply exits the menu.
     read -rp "$(_ui_prompt)" choice || {
-      printf '\n'
+      printf '
+'
       return 0
     }
     case "${choice:-}" in
-      1) quick_optimize ;;
-      2) custom_optimize ;;
-      3) show_status ;;
-      4)
-        doctor_run || true # drift is reported on screen, not an error here
+      1) menu_optimize ;;
+      2) menu_health ;;
+      3) security_menu ;;
+      4) tools_menu ;;
+      5) menu_rollback ;;
+      u | U)
+        st_self_update || log_warn "Update did not complete."
         ui_pause
         ;;
-      5) menu_rollback ;;
-      6) security_menu ;;
-      7) tools_menu ;;
-      8) node_menu ;;
-      9) menu_settings ;;
       0) return 0 ;;
       *)
-        printf '%sInvalid choice.%s\n' "$C_ERR" "$C_RESET"
+        printf '%sInvalid choice.%s
+' "$C_ERR" "$C_RESET"
         sleep 1
         ;;
     esac

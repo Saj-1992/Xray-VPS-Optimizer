@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.6.0] — 2026-10-25
+
+### Added
+
+- `st go` — one command: detect, optimize with safe defaults, no questions, then a health summary (accepts `--users`, `--qdisc`, `--dns`, `--profile`).
+- Health score (0-100) with traffic lights on the dashboard and a new Status & Health screen with a one-key "Fix everything".
+- Quick Optimize asks one question — how many users online at once — instead of tier jargon; the tier prompt is gone from Custom.
+- Update notice on the dashboard (checked at most once a day, 2 s timeout, press `u` to update).
+
+### Changed
+
+- Main menu reduced to five entries: Optimize · Status & Health · Security · Tools · Rollback. Node & Docker and Settings moved into Tools.
+
 ## [2.5.0] — 2026-10-25
 
 ### Added

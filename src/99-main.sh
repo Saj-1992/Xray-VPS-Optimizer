@@ -13,6 +13,8 @@ Usage: server-tools.sh [OPTIONS]   (installed: st [OPTIONS])
 
 Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
+  go                    One key: detect, optimize, show health — no questions
+                        (accepts --users / --qdisc / --dns / --profile)
   --auto                Non-interactive optimize: base layer + detected profile
   --dry-run             Show the plan and exact sysctl diff, apply NOTHING
   --verify              Check whether everything applied is still in effect
@@ -76,6 +78,7 @@ main() {
       --rollback) action="rollback" ;;
       --rollback-original) action="rollback_original" ;;
       --auto) action="auto" ;;
+      go | --go) action="go" ;;
       --dry-run) action="dryrun" ;;
       --verify | --doctor) action="verify" ;;
       --report) action="report" ;;
@@ -145,8 +148,8 @@ main() {
 
   # Tuning options only mean something for a non-interactive run; silently
   # ignoring them would hide a typo in a provisioning script.
-  if [[ -n $tuning_opts && $action != auto && $action != dryrun ]]; then
-    printf 'Options like --profile/--tier/--users/--dns require --auto or --dry-run.\n' >&2
+  if [[ -n $tuning_opts && $action != auto && $action != go && $action != dryrun ]]; then
+    printf 'Options like --profile/--tier/--users/--dns require --auto, go or --dry-run.\n' >&2
     exit 2
   fi
 
@@ -174,6 +177,10 @@ main() {
     auto)
       ST_OPT_BATCH=1
       auto_optimize
+      ;;
+    go)
+      ST_OPT_BATCH=1
+      go_optimize
       ;;
     dryrun)
       ST_OPT_BATCH=1

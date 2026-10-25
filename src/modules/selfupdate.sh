@@ -113,3 +113,35 @@ st_self_update() {
   printf '%sUpdated:%s v%s -> v%s (%s)\n' "$C_OK" "$C_RESET" "$ST_VERSION" "$new_ver" "$target"
   log_info "Self-updated: v${ST_VERSION} -> v${new_ver}."
 }
+
+# --- Update notice ---------------------------------------------------------
+# Checked at most once a day, with a hard 2 s timeout, only when the menu
+# opens — no daemon, no cron. The result is cached in the config file.
+
+readonly ST_URL_VERSION='https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/VERSION'
+
+st_update_check() {
+  has_cmd curl || return 0
+  local now last latest=''
+  now="$(date +%s)"
+  last="$(config_get update_check_ts 0)"
+  [[ $last =~ ^[0-9]+$ ]] || last=0
+  ((now - last < 86400)) && return 0
+
+  # An unreachable network is normal here (blocked region, offline): the
+  # notice is a convenience, so the attempt is recorded and simply skipped.
+  latest="$(curl -fsS --max-time 2 "$ST_URL_VERSION" 2>>"$ST_LOG_FILE" | tr -d '[:space:]')" || latest=''
+  [[ $latest =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || latest=''
+  config_set update_latest "$latest"
+  config_set update_check_ts "$now"
+  return 0
+}
+
+# st_update_available — 0 and prints the new version when a newer one exists.
+st_update_available() {
+  local latest
+  latest="$(config_get update_latest '')"
+  [[ -n $latest && $latest != "$ST_VERSION" ]] || return 1
+  ver_ge "$latest" "$ST_VERSION" || return 1
+  printf '%s' "$latest"
+}

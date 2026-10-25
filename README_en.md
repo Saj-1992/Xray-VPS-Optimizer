@@ -26,6 +26,13 @@ bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer
 
 From then on just run `st`; update with `st --update`.
 
+## 🚀 Fastest way
+
+```bash
+st go                     # detect, optimize, show health — no questions
+st go --users 10000       # size capacity from your real user count
+```
+
 ## ⚡ One command, whole-server tuning
 
 Run `st` and pick **1 (Quick Optimize)**. It auto-detects the workload and

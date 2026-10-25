@@ -45,4 +45,6 @@ if bash "$DIST" --auto --qdisc bogus >/dev/null 2>&1; then
 fi
 bash "$DIST" --help | grep -q -- '--qdisc' || fail "--help should document --qdisc"
 
+bash "$DIST" --help | grep -q -- ' go ' || fail "--help should document go"
+
 printf 'smoke: OK (v%s)\n' "$VERSION"

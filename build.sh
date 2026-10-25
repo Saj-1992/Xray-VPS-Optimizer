@@ -37,6 +37,7 @@ SOURCES=(
   modules/selfupdate.sh
   modules/optimize.sh
   modules/doctor.sh
+  modules/health.sh
   menu.sh
   99-main.sh
 )
