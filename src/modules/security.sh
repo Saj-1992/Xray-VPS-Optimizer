@@ -68,8 +68,8 @@ security_ufw() {
   local session_port
   session_port="$(_ssh_session_port)"
   if [[ -n $session_port && $session_port != "$ssh_port" ]]; then
-    printf '%sYou are connected through port %s (sshd listens on %s) — allowing both.%s
-'       "$C_WARN" "$session_port" "$ssh_port" "$C_RESET"
+    printf '%sYou are connected through port %s (sshd listens on %s) — allowing both.%s\n' \
+      "$C_WARN" "$session_port" "$ssh_port" "$C_RESET"
     ufw allow "${session_port}/tcp" >/dev/null 2>>"$ST_LOG_FILE" ||
       log_warn "Could not allow your current session port ${session_port}."
   fi
@@ -99,10 +99,9 @@ security_ufw() {
     open_ports+="${lp} "
   done < <(listening_service_ports)
   if [[ -n $open_ports ]]; then
-    printf '%sThese ports are serving clients right now but have no allow rule:%s %s
-'       "$C_WARN" "$C_RESET" "$open_ports"
-    printf 'Enabling UFW without them would cut your users off.
-'
+    printf '%sThese ports are serving clients right now but have no allow rule:%s %s\n' \
+      "$C_WARN" "$C_RESET" "$open_ports"
+    printf 'Enabling UFW without them would cut your users off.\n'
     if ui_confirm_yes "Allow them (tcp+udp) so nothing breaks?"; then
       for lp in $open_ports; do
         ufw allow "$lp" >/dev/null 2>>"$ST_LOG_FILE" || log_warn "Rule failed: ${lp}"
