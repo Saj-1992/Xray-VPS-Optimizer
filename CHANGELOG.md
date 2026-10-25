@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.8.3] — 2026-10-25
+
+### Fixed
+
+- **Tuning silently overridden by /etc/sysctl.conf.** `sysctl --system` reads /etc/sysctl.conf last, so a stock line such as `net.core.default_qdisc=fq_codel` beat ServerTools on every apply and boot (Doctor showed permanent drift and the health score stuck at 60%). Conflicting lines (different value, keys we set) in /etc/sysctl.conf and later-sorting /etc/sysctl.d files are now commented out after being tracked, so a rollback restores them.
+
 ## [2.8.2] — 2026-10-25
 
 ### Fixed

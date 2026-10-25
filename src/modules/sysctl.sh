@@ -396,6 +396,70 @@ sysctl_dry_run() {
     "$C_WARN" "${#ST_SYSCTL_DRIFT[@]}" "$total" "$C_RESET"
 }
 
+# _sysctl_neutralize_overrides RENDERED — `sysctl --system` reads /etc/sysctl.d
+# in name order and /etc/sysctl.conf LAST, so a stock sysctl.conf that sets
+# the same key (Ubuntu images often carry default_qdisc=fq_codel there) silently
+# beats our file at every apply and every boot. No file name can win against
+# it, so the conflicting lines are commented out — tracked first, so a rollback
+# restores them exactly. Only keys we set, with a DIFFERENT value, are touched.
+_sysctl_neutralize_overrides() {
+  local rendered="$1" ours candidate real tmp base n
+  local -a seen=()
+  ours="$(basename "$ST_SYSCTL_FILE")"
+  local -a candidates=(/etc/sysctl.conf)
+  for candidate in /etc/sysctl.d/*.conf; do
+    [[ -e $candidate ]] || continue
+    base="$(basename "$candidate")"
+    # Files sorting before ours lose to it anyway; leave them alone.
+    [[ $base > "$ours" ]] && candidates+=("$candidate")
+  done
+
+  for candidate in "${candidates[@]}"; do
+    [[ -f $candidate ]] || continue
+    real="$(readlink -f "$candidate")" || continue
+    [[ $real == /etc/* && $real != "$ST_SYSCTL_FILE" ]] || continue
+    [[ " ${seen[*]-} " == *" $real "* ]] && continue
+    seen+=("$real")
+
+    tmp="${real}.st-tmp"
+    awk -v ours="$ours" '
+      function norm(s) { gsub(/[[:space:]]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+      function key(s) { s = norm(s); sub(/^-/, "", s); gsub(/\//, ".", s); return s }
+      NR == FNR {
+        if ($0 ~ /^[[:space:]]*(#|$)/) next
+        i = index($0, "=")
+        if (i > 0) want[key(substr($0, 1, i - 1))] = norm(substr($0, i + 1))
+        next
+      }
+      {
+        i = index($0, "=")
+        if ($0 !~ /^[[:space:]]*[#;]/ && i > 0) {
+          k = key(substr($0, 1, i - 1))
+          if ((k in want) && norm(substr($0, i + 1)) != want[k]) {
+            print "# [ServerTools] overridden by " ours ": " $0
+            next
+          }
+        }
+        print
+      }' <(printf '%s\n' "$rendered") "$real" >"$tmp" || {
+      rm -f "$tmp"
+      log_warn "Could not scan ${real} for conflicting sysctl keys."
+      continue
+    }
+    if cmp -s "$tmp" "$real"; then
+      rm -f "$tmp"
+      continue
+    fi
+    n="$(grep -c '^# \[ServerTools\] overridden by' "$tmp")" || n=0
+    st_track_file "$real"
+    cat "$tmp" >"$real"
+    rm -f "$tmp"
+    log_info "Disabled ${n} sysctl line(s) in ${real} that override ${ours}."
+    ST_LOG_BUFFER+=("Disabled ${n} conflicting line(s) in ${real} (it is read last and was overriding the tuning; a rollback restores them).")
+  done
+  return 0
+}
+
 sysctl_apply() {
   if ! has_cmd sysctl; then
     log_error "sysctl command not found — cannot tune the kernel."
@@ -421,6 +485,7 @@ sysctl_apply() {
   st_track_file "$ST_SYSCTL_FILE"
   mkdir -p "$(dirname "$ST_SYSCTL_FILE")"
   printf '%s\n' "$rendered" >"$ST_SYSCTL_FILE"
+  _sysctl_neutralize_overrides "$rendered"
 
   if ((${#modules[@]} > 0)); then
     st_track_file "$ST_MODULES_FILE"
