@@ -53,7 +53,7 @@ inferred from `modinfo tcp_bbr` instead of the live
 
 Applying qdisc live: `default_qdisc` only affects new interfaces, so the
 module also runs `tc qdisc replace` on the default interface — no reboot
-needed for the switch to fq.
+needed for the switch (fq_codel is the default; fq and cake are opt-in via `--qdisc`).
 
 ### Buffers (TIER-scaled)
 

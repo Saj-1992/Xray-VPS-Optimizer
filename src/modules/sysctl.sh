@@ -15,6 +15,9 @@ ST_QDISC='fq_codel'
 ST_AUTO_QDISC='' # --qdisc: fq | fq_codel | cake (empty = config / auto)
 
 # sysctl_detect_bbr — pick congestion control and queueing discipline.
+# fq_codel is ALWAYS the first choice, with BBR or without; fq and cake are
+# opt-in (--qdisc / config key `qdisc`), and fq_codel is the fallback when the
+# kernel lacks the requested one.
 # The qdisc is probed for real (see qdisc_supported) instead of assumed, and
 # an explicit `qdisc` config key wins when the kernel actually supports it.
 sysctl_detect_bbr() {
@@ -27,7 +30,6 @@ sysctl_detect_bbr() {
     ((ST_DRY_RUN)) || modprobe tcp_bbr 2>/dev/null || true # absent module is not fatal
     if [[ " $(sysctl_get net.ipv4.tcp_available_congestion_control) " == *bbr* ]]; then
       ST_CC='bbr'
-      ST_QDISC='fq'
     elif ((ST_DRY_RUN)) && has_cmd modinfo && modinfo -n tcp_bbr >/dev/null 2>&1; then
       # Dry-run must not load anything, so on a host where tcp_bbr is a module
       # that is not loaded YET, the sysctl list above still says "no bbr" — and
@@ -35,7 +37,6 @@ sysctl_detect_bbr() {
       # delivers BBR. Inspecting the module without loading it, exactly as
       # qdisc_supported does under dry-run, makes the preview match the outcome.
       ST_CC='bbr'
-      ST_QDISC='fq'
     fi
   fi
 
@@ -537,4 +538,25 @@ sysctl_apply() {
 
   log_info "sysctl applied: cc=$(sysctl_get net.ipv4.tcp_congestion_control), qdisc=${ST_QDISC}, tier=${ST_TIER}, profile=${ST_PROFILE}"
   return "$rc"
+}
+
+# qdisc_verify — the queue discipline is checked against what ServerTools
+# configured (fq_codel unless --qdisc / the config key chose otherwise), both
+# as the kernel default and on the real default interface.
+# 0 in effect · 2 not configured here · 3 drifted.
+qdisc_verify() {
+  [[ -f $ST_SYSCTL_FILE ]] || return 2
+  local want live iface shown
+  want="$(awk -F'= *' '/^net.core.default_qdisc/ {print $2; exit}' "$ST_SYSCTL_FILE")" || want=''
+  [[ -n $want ]] || return 2
+  live="$(sysctl_get net.core.default_qdisc)"
+  [[ $live == "$want" ]] || return 3
+  iface="$(net_default_iface)" || iface=''
+  if [[ -n $iface ]] && has_cmd tc; then
+    # A multiqueue NIC shows "mq" at the root with the real qdisc on its
+    # queues, so look at everything attached to the interface, not just the root.
+    shown="$(tc qdisc show dev "$iface" 2>/dev/null)" || shown=''
+    [[ -z $shown || $shown == *"qdisc ${want} "* ]] || return 3
+  fi
+  return 0
 }

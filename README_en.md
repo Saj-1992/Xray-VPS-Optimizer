@@ -5,7 +5,7 @@ built for high-traffic VPN infrastructure: Xray/Reality nodes (`marzban-node`,
 `pg-node`/Pasarguard, `marznode`), Marzban/Pasarguard panels, WireGuard, x-ui,
 and Hiddify — and for general-purpose tuning of any Linux server.
 
-> Stable release: **v2.4.0** · one file, no dependencies, run as root.
+> Stable release: **v2.9.0** · one file, no dependencies, run as root.
 > Version 1 is frozen under [`legacy/`](legacy/) and no longer updated.
 
 📖 **[Full 0-to-100 guide (Persian) ← docs/GUIDE.md](docs/GUIDE.md)**
@@ -38,7 +38,7 @@ st go --users 10000       # size capacity from your real user count
 Run `st` and pick **1 (Quick Optimize)**. It auto-detects the workload and
 applies these layers on top of each other:
 
-- **Base layer (always):** BBR + fq, RAM-scaled accept queues and buffers,
+- **Base layer (always):** BBR + fq_codel, RAM-scaled accept queues and buffers,
   timers/keepalive, safe hardening, `tcp_min_snd_mss` (CVE-2019-11479 floor),
   and file/map ceilings.
 - **Workload layer (VPN node):** IPv4+IPv6 forwarding, sized conntrack, tuned
@@ -98,7 +98,7 @@ Fleet example:
 
 ```bash
 st --auto --profile vpn-node --users 10000 --dns cloudflare
-      --qdisc fq|fq_codel|cake   (default fq)
+      --qdisc fq|fq_codel|cake   (default fq_codel)
 st --verify --json     # nightly drift check from your own automation
 ```
 

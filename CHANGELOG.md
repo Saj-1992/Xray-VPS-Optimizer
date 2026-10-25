@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.9.0] — 2026-10-25
+
+### Changed
+
+- **fq_codel is now always the first choice** of queue discipline, with BBR or without. `fq` and `cake` stay available through `--qdisc` / the `qdisc` config key; an unsupported choice falls back to fq_codel.
+- Doctor gains an explicit **Queue discipline** check against what was configured, on both the kernel default and the real interface (multiqueue `mq` NICs handled).
+- README refreshed for the new commands and features.
+
 ## [2.8.3] — 2026-10-25
 
 ### Fixed

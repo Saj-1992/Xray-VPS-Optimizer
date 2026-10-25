@@ -32,7 +32,7 @@ Options for --auto and --dry-run:
   --users N             Expected concurrent users — sizes conntrack from the
                         real user count instead of RAM (with a RAM warning)
   --qdisc NAME          Queue discipline paired with BBR: fq | fq_codel | cake
-                        (default fq; cake = best fairness for many users)
+                        (default fq_codel; cake = best fairness for many users)
   --dns VALUE           Provider (cloudflare|google|quad9|opendns|shecan|
                         electro|begzar) or custom "primary,secondary"
   --no-swap             Skip the swap step

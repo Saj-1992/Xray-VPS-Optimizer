@@ -160,7 +160,7 @@ _optimize_show_plan() {
     ui_kv "Conntrack" "${ST_CONNTRACK} entries (~$(tier_conntrack_ram_mb) MB kernel RAM worst case)"
   fi
   ui_kv "Socket buffers" "up to ${ST_BUF_MB} MB per socket"
-  ui_kv "Congestion" "BBR when the kernel supports it, else cubic"
+  ui_kv "Congestion" "BBR when the kernel supports it, else cubic · queue: ${ST_AUTO_QDISC:-$(config_get qdisc fq_codel)}"
 
   local warn
   warn="$(capacity_warning)"
@@ -397,7 +397,7 @@ custom_optimize() {
   capacity_apply_users
 
   local qd_in
-  read -rp "Queue discipline with BBR [fq / fq_codel / cake, Enter=$(config_get qdisc auto)]: " qd_in || qd_in=''
+  read -rp "Queue discipline with BBR [fq / fq_codel / cake, Enter=$(config_get qdisc fq_codel)]: " qd_in || qd_in=''
   case "${qd_in,,}" in
     fq | fq_codel | cake) config_set qdisc "${qd_in,,}" ;;
     auto) config_set qdisc auto ;;
