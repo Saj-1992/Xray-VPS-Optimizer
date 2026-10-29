@@ -33,6 +33,10 @@ st go                     # detect, optimize, show health — no questions
 st go --users 10000       # size capacity from your real user count
 ```
 
+## 🛡️ Iran ISP blocker
+
+Security → 5: block the address ranges of chosen Iranian ISPs on chosen ports (or all ports), or allow **only** those ISPs. Built on `ipset` (constant-time lookups), covers Docker-published ports, always exempts your SSH port and your own IP, persists via a oneshot unit. Idea and ISP lists: [Kiya6955/IR-ISP-Blocker](https://github.com/Kiya6955/IR-ISP-Blocker) (lists are downloaded from there at use time).
+
 ## ⚡ One command, whole-server tuning
 
 Run `st` and pick **1 (Quick Optimize)**. It auto-detects the workload and

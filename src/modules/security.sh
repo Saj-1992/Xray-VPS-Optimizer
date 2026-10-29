@@ -303,6 +303,7 @@ security_menu() {
     ui_menu_item 2 "fail2ban" "SSH brute-force bans (resident service ~20 MB)"
     ui_menu_item 3 "SSH hardening" "UseDNS off, optional key-only login (validated)"
     ui_menu_item 4 "Restrict node API" "panel-only access to 62050/62051"
+    ui_menu_item 5 "Iran ISP blocker" "block or allow-only Iranian ISP ranges"
     ui_menu_item 0 "Back"
     read -rp "$(_ui_prompt)" choice || return 0
     case "${choice:-}" in
@@ -322,6 +323,7 @@ security_menu() {
         security_node_api || true
         ui_pause
         ;;
+      5) isp_menu ;;
       0) return 0 ;;
       *)
         printf '%sInvalid choice.%s\n' "$C_ERR" "$C_RESET"

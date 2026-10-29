@@ -15,6 +15,7 @@ Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
   go                    One key: detect, optimize, show health — no questions
                         (accepts --users / --qdisc / --dns / --profile)
+  isp-restore           Reload the Iran ISP blocker from its saved settings (boot unit)
   boost                 Re-apply proxy priority to running services/containers
                         (also run at boot by a oneshot unit)
   --auto                Non-interactive optimize: base layer + detected profile
@@ -83,6 +84,7 @@ main() {
       --auto) action="auto" ;;
       go | --go) action="go" ;;
       boost | --boost) action="boost" ;;
+      isp-restore) action="isp_restore" ;;
       --dry-run) action="dryrun" ;;
       --verify | --doctor) action="verify" ;;
       --report) action="report" ;;
@@ -185,6 +187,10 @@ main() {
     auto)
       ST_OPT_BATCH=1
       auto_optimize
+      ;;
+    isp_restore)
+      ST_OPT_BATCH=1
+      isp_restore || st_escalate_exit $?
       ;;
     boost)
       ST_OPT_BATCH=1

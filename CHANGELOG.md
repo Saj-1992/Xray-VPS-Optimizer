@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.10.0] — 2026-10-29
+
+### Added
+
+- **Iran ISP blocker** (Security → 5): block the address ranges of chosen Iranian ISPs (MCI, MTN, TCI, Rightel, Shatel, AsiaTech, Pishgaman, MobinNet, ParsOnline) on chosen ports or on all ports, or the reverse — let ONLY those ISPs reach given ports. Idea and ISP lists from [Kiya6955/IR-ISP-Blocker](https://github.com/Kiya6955/IR-ISP-Blocker); the lists are downloaded from there when used, validated line by line and cached.
+  - one `ipset` hash:net set instead of thousands of iptables rules (constant-time lookup per packet);
+  - also guards Docker-published ports through `DOCKER-USER` (matching the original destination port), which never pass through INPUT;
+  - the SSH port and the IP of the session applying it are always exempt; extra IPs/CIDRs and always-open ports can be added;
+  - persisted by a oneshot unit (`st isp-restore`) that restores from the cached lists at boot and exits — no daemon, no iptables-persistent;
+  - Status shows the packets dropped; Update re-downloads the lists; Remove takes everything out; Doctor checks it.
+  - IPv4 only (the published lists are IPv4).
+
 ## [2.9.1] — 2026-10-25
 
 ### Fixed
