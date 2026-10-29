@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.10.1] — 2026-10-29
+
+### Fixed
+
+- Formatting (shfmt) in the ISP blocker.
+
 ## [2.10.0] — 2026-10-29
 
 ### Added

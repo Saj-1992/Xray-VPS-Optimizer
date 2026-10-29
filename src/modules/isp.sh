@@ -342,8 +342,9 @@ isp_restore() {
 isp_remove() {
   local chain
   if has_cmd iptables; then
-    iptables -D INPUT -j "$ST_ISP_CHAIN_IN" 2>/dev/null || true # hook may already be gone
-    iptables -D DOCKER-USER -j "$ST_ISP_CHAIN_FWD" 2>/dev/null || true # no Docker, or already unhooked
+    # Either hook may already be gone, or Docker may not exist at all.
+    iptables -D INPUT -j "$ST_ISP_CHAIN_IN" 2>/dev/null || true
+    iptables -D DOCKER-USER -j "$ST_ISP_CHAIN_FWD" 2>/dev/null || true
     for chain in "$ST_ISP_CHAIN_IN" "$ST_ISP_CHAIN_FWD"; do
       if iptables -n -L "$chain" >/dev/null 2>&1; then
         iptables -F "$chain" 2>>"$ST_LOG_FILE"
