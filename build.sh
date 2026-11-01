@@ -48,27 +48,18 @@ SOURCES=(
 # single built file works with no network and no second repository.
 emit_isp_data() {
   local f id
-  printf '
-# ------------------------- data/isp (embedded) -------------------------
-'
-  printf '# _isp_embedded ID — the bundled address list of one ISP.
-'
-  printf '_isp_embedded() {
-  case "$1" in
-'
+  printf '\n# ------------------------- data/isp (embedded) -------------------------\n'
+  printf '# _isp_embedded ID — the bundled address list of one ISP.\n'
+  # The single quotes are deliberate: this text is generated shell code.
+  # shellcheck disable=SC2016
+  printf '_isp_embedded() {\n  case "$1" in\n'
   for f in "${ROOT_DIR}"/data/isp/*.ipv4; do
     id="$(basename "$f" .ipv4)"
-    printf "    %s)
-      cat <<'ISP_DATA_EOF'
-" "$id"
+    printf "    %s)\n      cat <<'ISP_DATA_EOF'\n" "$id"
     cat "$f"
-    printf 'ISP_DATA_EOF
-      ;;
-'
+    printf 'ISP_DATA_EOF\n      ;;\n'
   done
-  printf '  esac
-}
-'
+  printf '  esac\n}\n'
 }
 
 mkdir -p "${ROOT_DIR}/dist"
