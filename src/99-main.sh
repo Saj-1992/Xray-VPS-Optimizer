@@ -15,6 +15,7 @@ Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
   go                    One key: detect, optimize, show health — no questions
                         (accepts --users / --qdisc / --dns / --profile)
+  isp SUB [LIST]        Iran ISP blocker: status | block mci,mtn | unblock mtn | set LIST | all | none | update
   isp-restore           Reload the Iran ISP blocker from its saved settings (boot unit)
   boost                 Re-apply proxy priority to running services/containers
                         (also run at boot by a oneshot unit)
@@ -85,6 +86,17 @@ main() {
       go | --go) action="go" ;;
       boost | --boost) action="boost" ;;
       isp-restore) action="isp_restore" ;;
+      isp)
+        action="isp"
+        if [[ -n ${2:-} && $2 != -* ]]; then
+          ST_ISP_SUB="$2"
+          shift
+        fi
+        if [[ -n ${2:-} && $2 != -* ]]; then
+          ST_ISP_LIST="$2"
+          shift
+        fi
+        ;;
       --dry-run) action="dryrun" ;;
       --verify | --doctor) action="verify" ;;
       --report) action="report" ;;
@@ -187,6 +199,10 @@ main() {
     auto)
       ST_OPT_BATCH=1
       auto_optimize
+      ;;
+    isp)
+      ST_OPT_BATCH=1
+      isp_cli "$ST_ISP_SUB" "$ST_ISP_LIST" || st_escalate_exit $?
       ;;
     isp_restore)
       ST_OPT_BATCH=1

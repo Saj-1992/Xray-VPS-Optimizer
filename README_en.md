@@ -35,7 +35,7 @@ st go --users 10000       # size capacity from your real user count
 
 ## 🛡️ Iran ISP blocker
 
-Security → 5: block the address ranges of chosen Iranian ISPs on chosen ports (or all ports), or allow **only** those ISPs. Built on `ipset` (constant-time lookups), covers Docker-published ports, always exempts your SSH port and your own IP, persists via a oneshot unit. Idea and ISP lists: [Kiya6955/IR-ISP-Blocker](https://github.com/Kiya6955/IR-ISP-Blocker) (lists are downloaded from there at use time).
+Security → 5: block the address ranges of chosen Iranian ISPs on chosen ports (or all ports). Built on `ipset` (constant-time lookups), covers Docker-published ports, always exempts your SSH port and your own IP, persists via a oneshot unit. Type numbers to flip ISPs between blocked and open, as often as you like (`1 3 5`); or script it: `st isp block mci,mtn`, `st isp unblock mtn`, `st isp status`. The address lists are stored in this repo (`data/isp`) and embedded in the script — no network needed; `st isp update` refreshes them. Idea and original lists: [Kiya6955/IR-ISP-Blocker](https://github.com/Kiya6955/IR-ISP-Blocker).
 
 ## ⚡ One command, whole-server tuning
 

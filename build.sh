@@ -44,6 +44,33 @@ SOURCES=(
   99-main.sh
 )
 
+# emit_isp_data — the Iran ISP address lists (data/isp) as a function, so the
+# single built file works with no network and no second repository.
+emit_isp_data() {
+  local f id
+  printf '
+# ------------------------- data/isp (embedded) -------------------------
+'
+  printf '# _isp_embedded ID — the bundled address list of one ISP.
+'
+  printf '_isp_embedded() {
+  case "$1" in
+'
+  for f in "${ROOT_DIR}"/data/isp/*.ipv4; do
+    id="$(basename "$f" .ipv4)"
+    printf "    %s)
+      cat <<'ISP_DATA_EOF'
+" "$id"
+    cat "$f"
+    printf 'ISP_DATA_EOF
+      ;;
+'
+  done
+  printf '  esac
+}
+'
+}
+
 mkdir -p "${ROOT_DIR}/dist"
 
 {
@@ -54,6 +81,9 @@ mkdir -p "${ROOT_DIR}/dist"
   printf '# https://github.com/Saj-1992/Xray-VPS-Optimizer\n'
   printf '# =========================================================================\n'
   for src in "${SOURCES[@]}"; do
+    if [[ $src == 99-main.sh ]]; then
+      emit_isp_data
+    fi
     printf '\n# ------------------------- src/%s -------------------------\n' "$src"
     # Strip per-file shebang/shellcheck directives; inject the version string.
     sed -e '\|^#!/usr/bin/env bash$|d' \

@@ -3,3 +3,4 @@
 *.sh text eol=lf
 Makefile text eol=lf
 VERSION text eol=lf
+*.ipv4 text eol=lf

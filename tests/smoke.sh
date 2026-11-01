@@ -47,4 +47,14 @@ bash "$DIST" --help | grep -q -- '--qdisc' || fail "--help should document --qdi
 
 bash "$DIST" --help | grep -q -- ' go ' || fail "--help should document go"
 
+# The ISP address lists must be embedded and well-formed.
+bash "$DIST" --help | grep -q -- 'isp SUB' || fail "--help should document isp"
+for list in "${ROOT_DIR}"/data/isp/*.ipv4; do
+  [[ -s $list ]] || fail "empty ISP list: $list"
+  if grep -qvE '^([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[12][0-9]|3[0-2]))?$' "$list"; then
+    fail "malformed line in $list"
+  fi
+  grep -qxF "$(sed -n 1p "$list")" "$DIST" || fail "$list is not embedded in dist"
+done
+
 printf 'smoke: OK (v%s)\n' "$VERSION"

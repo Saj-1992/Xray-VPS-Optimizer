@@ -1,0 +1,54 @@
+name: Sync ISP lists
+
+# Pulls the upstream Iranian ISP address lists (Kiya6955/IR-ISP-Blocker) into
+# data/isp, validates every line, rebuilds dist/ with them embedded and commits
+# only when something changed. Servers pick the new data up with `st isp update`
+# (from data/isp) or with a normal `st --update` (embedded in dist).
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch and validate lists
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/Kiya6955/IR-ISP-Blocker/main'
+          for pair in mci:mci mtn:mtn tci:tci rightel:rightel shatel:shatel asiatech:asiatech pishgaman:pishgaman mobinnet:mobinnet parsonline:parsan; do
+            id="${pair%%:*}"; stem="${pair##*:}"
+            curl -fsSL "${base}/${stem}-ips.ipv4" | tr -d '\r' \
+              | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[12][0-9]|3[0-2]))?$/' \
+              | sort -u -t. -k1,1n -k2,2n -k3,3n -k4,4n > "/tmp/${id}.new"
+            # Refuse a suspiciously small or empty download: keep the old list.
+            old="$(wc -l < "data/isp/${id}.ipv4")"
+            new="$(wc -l < "/tmp/${id}.new")"
+            if [ "$new" -lt 10 ] || [ "$new" -lt $((old / 2)) ]; then
+              echo "::warning::${id}: ${new} ranges (was ${old}) — keeping the current list."
+              continue
+            fi
+            cp "/tmp/${id}.new" "data/isp/${id}.ipv4"
+          done
+
+      - name: Rebuild and commit if changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- data/isp; then
+            echo "Lists unchanged."
+            exit 0
+          fi
+          bash build.sh
+          bash tests/smoke.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/isp dist/server-tools.sh
+          git commit -m "chore(data): sync Iranian ISP lists"
+          git push

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.11.0] — 2026-11-01
+
+### Changed
+
+- **Iran ISP blocker rebuilt around toggles.** One screen lists every ISP as BLOCKED or open; type numbers to flip them (`1 3 5`), `a` blocks all, `n` opens all, `p` sets the ports, `w` the exempt IPs, `u` updates the lists. Run it as often as you like: it holds a *set* of blocked ISPs, every change re-applies the whole set, so blocking several and opening some again always ends in the state shown. Each change reports what was blocked/opened.
+- **The address lists now live in this repository** (`data/isp`, with the upstream notice and license) and are **embedded in the built script** — the blocker needs no network and no other repository. `st isp update` refreshes them from here, and a weekly workflow (`sync-isp.yml`) pulls upstream changes, validates them and rebuilds.
+- New CLI: `st isp status | block mci,mtn | unblock mtn | set LIST | all | none | reset | update`.
+- The "allow only these ISPs" mode was retired (block the ones you want kept out instead); an old setting using it is switched off with a warning rather than misread.
+
 ## [2.10.1] — 2026-10-29
 
 ### Fixed
