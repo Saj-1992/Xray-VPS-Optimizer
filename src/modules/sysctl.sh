@@ -490,6 +490,9 @@ sysctl_apply() {
   local rendered
   rendered="$(_sysctl_render)"
 
+  # Before our file exists: this is the last moment the live values are original.
+  runtime_snapshot_save "$rendered"
+
   st_track_file "$ST_SYSCTL_FILE"
   mkdir -p "$(dirname "$ST_SYSCTL_FILE")"
   printf '%s\n' "$rendered" >"$ST_SYSCTL_FILE"

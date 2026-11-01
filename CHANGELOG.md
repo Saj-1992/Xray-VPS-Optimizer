@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.12.0] — 2026-11-01
+
+### Added
+
+- **`st repair` / Reboot check / "Survives reboot" in Doctor.** Verifies that every boot unit ServerTools created exists and is *enabled*, and repairs what is not (the ISP blocker's unit is recreated while anything is blocked). `st go` runs it automatically.
+- **Boot units no longer depend on a manual `--install`.** Features whose unit calls `st` (ISP blocker, proxy priority) install the `st` command when it is missing, and the priority unit is re-enabled if it was ever disabled.
+- **Rollback now reverts live state.** Undoing a run or restoring the original state first removes the ISP blocker chains/sets, MSS and NOTRACK rules and puts proxy priorities back, then restores files. The first sysctl apply on a host records the original kernel values and qdisc, and *Restore original state* sets them back.
+- `st go` prints the health score before and after.
+
 ## [2.11.1] — 2026-11-01
 
 ### Fixed

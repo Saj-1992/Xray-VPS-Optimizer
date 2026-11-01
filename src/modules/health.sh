@@ -17,6 +17,7 @@ readonly -a ST_HEALTH_CHECKS=(
   'File limits|limits_verify|core'
   'Proxy priority|priority_verify|optional'
   'DNS|dns_verify|optional'
+  'Survives reboot|persist_verify|optional'
 )
 
 ST_HEALTH_SCORE=0
@@ -122,10 +123,16 @@ health_show() {
 # go_optimize — the one-command flow behind `st go`: detect, optimize with
 # safe defaults, ask nothing, then show the resulting health.
 go_optimize() {
+  detect_stack
+  health_collect
+  local before="$ST_HEALTH_SCORE"
   auto_optimize
+  persist_repair || true # a repair problem is shown on screen and by Doctor
   health_collect
   ui_hr
   health_show
+  printf '\n  %sBefore%s %s%d%%%s  →  %sNow%s %s\n' \
+    "$C_MUTED" "$C_RESET" "$C_MUTED" "$before" "$C_RESET" "$C_KEY" "$C_RESET" "$(health_bar "$ST_HEALTH_SCORE")"
   printf '\n%sDone.%s Re-check anytime with: st --verify\n' "$C_OK" "$C_RESET"
 }
 
@@ -145,6 +152,7 @@ menu_health() {
     fi
     ui_menu_item 2 "Full report" "all system details"
     ui_menu_item 3 "Detailed check" "Doctor — what exactly drifted"
+    ui_menu_item 4 "Reboot check" "make sure every setting comes back after a reboot"
     ui_menu_item 0 "Back"
     read -rp "$(_ui_prompt)" choice || return 0
     case "${choice:-}" in
@@ -159,6 +167,10 @@ menu_health() {
       2) show_status ;;
       3)
         doctor_run || true # drift is reported on screen, not an error here
+        ui_pause
+        ;;
+      4)
+        persist_repair || true # outcome is printed by the function
         ui_pause
         ;;
       0) return 0 ;;

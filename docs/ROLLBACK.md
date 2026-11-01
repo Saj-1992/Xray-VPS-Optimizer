@@ -49,3 +49,24 @@ can therefore never be "restored" into existence, and a pre-existing file
   services, active swap. The UI says so explicitly and recommends a reboot
   for a guaranteed clean slate. (Phase 2 adds targeted re-apply steps such as
   `sysctl --system` after restoring sysctl files.)
+
+## Reboot-safe, and undoable live (v2.12)
+
+**Everything ServerTools sets comes back after a reboot.** Settings are files
+(`sysctl.d`, `limits.d`, systemd drop-ins, ...) or a oneshot unit that re-applies
+them at boot and exits (`server-tools-perf/mss/notrack/boost/isp`). `st repair`
+(also run by `st go`, and the Reboot check in Status & Health) verifies that each
+one is in place and *enabled*, re-enables what is disabled and recreates what is
+missing; Doctor shows the result as "Survives reboot". The boot units call
+`st`, so the tool installs the `st` command itself when a feature needs it.
+
+**Undo covers the live state too, not only files.** Both rollbacks first undo what
+is running — Iran ISP blocker chains and ipsets, MSS clamp rules, NOTRACK rules,
+proxy priorities (nice / OOM score / cpu-shares) — then restore or remove the
+files. *Restore original state* also puts the kernel values back as they were
+before the first run: the first sysctl apply on a host records the live value of
+every key it sets (`/var/lib/server-tools/original-runtime.tsv`) and the root
+qdisc of the default interface. Hosts tuned by an older version have no such
+snapshot; their files are restored and loaded kernel values finish returning at
+the next reboot. CPU/NIC data-path tweaks (RPS, governor, THP) also settle back at
+the next reboot.

@@ -58,6 +58,10 @@ rollback_original() {
     return 0
   fi
 
+  # Live state first (firewall rules, ipsets, priorities): some of it is
+  # described by files that are about to disappear.
+  runtime_revert_prepass all
+
   local file target restored=0 removed=0
   # Restore first, then remove created files: a file can appear as created in
   # one run and modified in a later one, and the original must win.
@@ -92,10 +96,13 @@ rollback_original() {
   has_cmd systemctl && { systemctl daemon-reload 2>>"$ST_LOG_FILE" || log_warn "daemon-reload failed."; }
   has_cmd sysctl && { sysctl --system >/dev/null 2>>"$ST_LOG_FILE" || log_warn "sysctl reload reported errors."; }
 
+  # Kernel values back to what they were before the first run (if recorded).
+  runtime_restore_original
+
   log_info "Factory restore: ${restored} restored, ${removed} removed."
   printf '%sRestored to the state before ServerTools ever ran:%s %d file(s) restored, %d removed.\n' \
     "$C_OK" "$C_RESET" "$restored" "$removed"
-  printf '%sA reboot guarantees every runtime setting is back as well.%s\n' "$C_MUTED" "$C_RESET"
+  printf '%sCPU/NIC data-path tweaks (RPS, governor, THP) and open-file limits of already-running processes finish returning at the next reboot.%s\n' "$C_MUTED" "$C_RESET"
   return 0
 }
 
@@ -109,6 +116,10 @@ rollback_latest() {
     log_warn "No recorded changes — nothing to roll back."
     return 0
   fi
+
+  # Live effect first: some features (NOTRACK ports) are described by files
+  # that the loop below removes.
+  runtime_revert_prepass "$run"
 
   local src="${ST_BACKUP_DIR}/runs/${run}"
   local action target restored=0 removed=0 missing=0 sysctl_touched=0 units_touched=0
@@ -163,7 +174,7 @@ rollback_latest() {
     "$C_OK" "$run" "$C_RESET" "$restored" "$removed"
   ((missing > 0)) && printf ', %s%d backup(s) missing%s' "$C_WARN" "$missing" "$C_RESET"
   printf '\n'
-  printf '%sNote:%s runtime state (loaded sysctl values, running services) is not\n' "$C_MUTED" "$C_RESET"
-  printf '%sreverted automatically — a reboot guarantees a clean slate.%s\n' "$C_MUTED" "$C_RESET"
+  printf '%sNote:%s files and live firewall/priority state are reverted; kernel values\n' "$C_MUTED" "$C_RESET"
+  printf '%sloaded by an undone sysctl file settle back after a reboot (or use "Restore original state").%s\n' "$C_MUTED" "$C_RESET"
   return 0
 }

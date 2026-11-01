@@ -17,6 +17,7 @@ Actions (no action starts the interactive menu):
                         (accepts --users / --qdisc / --dns / --profile)
   isp SUB [LIST]        Iran ISP blocker: status | block mci,mtn | unblock mtn | set LIST | all | none | update
   isp-restore           Reload the Iran ISP blocker from its saved settings (boot unit)
+  repair                Make sure every setting comes back after a reboot (re-enable units)
   boost                 Re-apply proxy priority to running services/containers
                         (also run at boot by a oneshot unit)
   --auto                Non-interactive optimize: base layer + detected profile
@@ -85,6 +86,7 @@ main() {
       --auto) action="auto" ;;
       go | --go) action="go" ;;
       boost | --boost) action="boost" ;;
+      repair | --repair) action="repair" ;;
       isp-restore) action="isp_restore" ;;
       isp)
         action="isp"
@@ -207,6 +209,10 @@ main() {
     isp_restore)
       ST_OPT_BATCH=1
       isp_restore || st_escalate_exit $?
+      ;;
+    repair)
+      ST_OPT_BATCH=1
+      persist_repair || st_escalate_exit $?
       ;;
     boost)
       ST_OPT_BATCH=1

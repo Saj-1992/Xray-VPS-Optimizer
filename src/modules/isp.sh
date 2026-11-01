@@ -377,11 +377,9 @@ _isp_teardown() {
 # _isp_write_unit — restore the blocker at boot (oneshot, exits at once). It
 # runs after Docker so DOCKER-USER exists, and needs no network.
 _isp_write_unit() {
-  if [[ ! -x $ST_INSTALL_PATH ]]; then
-    log_warn "'st' is not installed (st --install) — the blocker will not return after a reboot."
-    return 3
-  fi
   has_cmd systemctl || return 2
+  # The unit calls `st isp-restore`, so `st` has to exist.
+  persist_ensure_st || return 3
   if [[ ! -f $ST_ISP_UNIT ]]; then
     st_track_file "$ST_ISP_UNIT"
     cat >"$ST_ISP_UNIT" <<EOF

@@ -33,6 +33,7 @@ SOURCES=(
   modules/vpn.sh
   modules/priority.sh
   modules/isp.sh
+  modules/persist.sh
   modules/ipv6.sh
   modules/installer.sh
   modules/tools.sh
