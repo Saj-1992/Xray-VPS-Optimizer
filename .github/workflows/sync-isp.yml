@@ -1,9 +1,11 @@
 name: Sync ISP lists
 
-# Pulls the upstream Iranian ISP address lists (Kiya6955/IR-ISP-Blocker) into
-# data/isp, validates every line, rebuilds dist/ with them embedded and commits
-# only when something changed. Servers pick the new data up with `st isp update`
-# (from data/isp) or with a normal `st --update` (embedded in dist).
+# Refreshes the Iranian ISP address lists in data/isp:
+#   upstream/  Kiya6955/IR-ISP-Blocker lists
+#   asn/       IPv4 prefixes announced by each ISP's AS (asn.map), from RIPEstat
+# then merges them (tools/merge-isp.sh), rebuilds dist/ with the lists embedded
+# and commits only when something changed. Servers pick the new data up with
+# `st isp update` (from data/isp) or with a normal `st --update` (embedded).
 
 on:
   schedule:
@@ -19,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Fetch and validate lists
+      - name: Fetch upstream lists
         run: |
           set -euo pipefail
           base='https://raw.githubusercontent.com/Kiya6955/IR-ISP-Blocker/main'
@@ -27,20 +29,37 @@ jobs:
             id="${pair%%:*}"; stem="${pair##*:}"
             curl -fsSL "${base}/${stem}-ips.ipv4" | tr -d '\r' \
               | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[12][0-9]|3[0-2]))?$/' \
-              | sort -u -t. -k1,1n -k2,2n -k3,3n -k4,4n > "/tmp/${id}.new"
+              | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | uniq > "/tmp/${id}.up"
             # Refuse a suspiciously small or empty download: keep the old list.
-            old="$(wc -l < "data/isp/${id}.ipv4")"
-            new="$(wc -l < "/tmp/${id}.new")"
+            old="$(wc -l < "data/isp/upstream/${id}.ipv4")"
+            new="$(wc -l < "/tmp/${id}.up")"
             if [ "$new" -lt 10 ] || [ "$new" -lt $((old / 2)) ]; then
               echo "::warning::${id}: ${new} ranges (was ${old}) — keeping the current list."
               continue
             fi
-            cp "/tmp/${id}.new" "data/isp/${id}.ipv4"
+            cp "/tmp/${id}.up" "data/isp/upstream/${id}.ipv4"
           done
 
-      - name: Rebuild and commit if changed
+      - name: Fetch announced prefixes of each ISP's AS
         run: |
           set -euo pipefail
+          grep -vE '^\s*(#|$)' data/isp/asn.map | while read -r id asn; do
+            curl -fsSL "https://stat.ripe.net/data/announced-prefixes/data.json?resource=${asn}" \
+              | grep -oE '"prefix": *"[0-9.]+/[0-9]+"' | grep -oE '[0-9.]+/[0-9]+' \
+              | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | uniq > "/tmp/${id}.asn"
+            old="$(wc -l < "data/isp/asn/${id}.ipv4" 2>/dev/null || echo 0)"
+            new="$(wc -l < "/tmp/${id}.asn")"
+            if [ "$new" -lt 5 ] || [ "$new" -lt $((old / 2)) ]; then
+              echo "::warning::${id} (${asn}): ${new} prefixes (was ${old}) — keeping the current list."
+              continue
+            fi
+            cp "/tmp/${id}.asn" "data/isp/asn/${id}.ipv4"
+          done
+
+      - name: Merge, rebuild and commit if changed
+        run: |
+          set -euo pipefail
+          bash tools/merge-isp.sh
           if git diff --quiet -- data/isp; then
             echo "Lists unchanged."
             exit 0

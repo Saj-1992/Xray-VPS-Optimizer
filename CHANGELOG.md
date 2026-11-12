@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.12.1] — 2026-11-12
+
+### Added
+
+- **MCI list now includes every prefix announced by AS197207** (Mobile Communication Company of Iran), taken from BGP data via RIPEstat: 167 ranges the upstream list did not have. The mechanism is generic — `data/isp/asn.map` maps an ISP id to an AS number, `data/isp/asn/` holds its prefixes, `tools/merge-isp.sh` merges them with `data/isp/upstream/` into the embedded list, and the weekly sync refreshes both sources. Adding another AS for any ISP is one line.
+
+### Fixed
+
+- **Address lists were missing ranges.** The earlier normalisation de-duplicated on the network address and ignored the mask, so a range such as `x.y.0.0/17` disappeared whenever `x.y.0.0/20` was listed too — about 150 ranges of MCI and up to a fifth of the others. The lists are now exact (de-duplicated line by line); the weekly sync uses the same rule.
+
 ## [2.12.0] — 2026-11-01
 
 ### Added

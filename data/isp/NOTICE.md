@@ -16,3 +16,11 @@ refreshed by `.github/workflows/sync-isp.yml` (weekly) and by
 
 File names: `mci`, `mtn`, `tci`, `rightel`, `shatel`, `asiatech`, `pishgaman`,
 `mobinnet`, `parsonline` (upstream calls the last one `parsan`).
+
+## Layout
+
+- `upstream/<id>.ipv4` — the Kiya6955/IR-ISP-Blocker lists, as published.
+- `asn/<id>.ipv4` — IPv4 prefixes announced in BGP by the ISP's autonomous
+  system (see `asn.map`; currently MCI = AS197207), from RIPEstat.
+- `<id>.ipv4` — the union of the two, produced by `tools/merge-isp.sh`. This is
+  what the build embeds and what `st isp update` downloads. Do not edit it by hand.
