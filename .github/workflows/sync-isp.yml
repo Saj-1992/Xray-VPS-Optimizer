@@ -30,11 +30,12 @@ jobs:
             curl -fsSL "${base}/${stem}-ips.ipv4" | tr -d '\r' \
               | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[12][0-9]|3[0-2]))?$/' \
               | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | uniq > "/tmp/${id}.up"
-            # Refuse a suspiciously small or empty download: keep the old list.
+            # Refuse an empty or implausibly small download. A big drop in the
+            # NUMBER of ranges is fine: upstream aggregates its lists.
             old="$(wc -l < "data/isp/upstream/${id}.ipv4")"
             new="$(wc -l < "/tmp/${id}.up")"
-            if [ "$new" -lt 10 ] || [ "$new" -lt $((old / 2)) ]; then
-              echo "::warning::${id}: ${new} ranges (was ${old}) — keeping the current list."
+            if [ "$new" -lt 10 ]; then
+              echo "::warning::${id}: only ${new} ranges (was ${old}) — keeping the current list."
               continue
             fi
             cp "/tmp/${id}.up" "data/isp/upstream/${id}.ipv4"
