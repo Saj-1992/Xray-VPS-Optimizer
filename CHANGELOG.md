@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.12.3] — 2026-11-12
+
+### Added
+
+- `data/isp/extra/<id>.ipv4`: hand-added ranges that survive every sync. First entry: `46.51.48.0/20` for MCI (it was also announced by AS197207; now it stays even if that changes).
+
 ## [2.12.2] — 2026-11-12
 
 ### Added
