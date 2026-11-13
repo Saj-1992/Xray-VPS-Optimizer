@@ -1,3 +1,4 @@
 # id AS-number — IPv4 prefixes announced by the AS are merged into the ISP list
 # (BGP data from RIPEstat; refreshed weekly by .github/workflows/sync-isp.yml)
 mci AS197207
+mtn AS44244

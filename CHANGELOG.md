@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.12.4] — 2026-11-13
+
+### Added
+
+- **Complete MCI and Irancell (MTN) address space.** Cross-checked the RIPE database (all `inetnum` objects of the operators' organisations `ORG-MCCo2-RIPE` and `ORG-ICSa1-RIPE`) against the BGP-announced prefixes of their ASes (AS197207, AS44244) and added what the lists lacked, in `data/isp/extra/`:
+  - **MCI**: 21 ranges (~78k addresses), e.g. `93.117.176.0/20`, `93.119.208.0/20`, `178.131.0.0/16` parts, `188.229.96.0/19` parts, `188.211.0.0/20`, `37.98.x`, `46.51.32.0/22`.
+  - **Irancell**: `5.118.0.0/16`, `2.144.64.0/19`, `2.144.160.0/19`, `185.115.76.0/22` (~83k addresses). The old list had holes inside Irancell's 5.112.0.0/12 and 2.144.0.0/14 blocks.
+- `asn.map` gains `mtn AS44244`, so Irancell's announced prefixes are refreshed weekly too (`data/isp/asn/mtn.ipv4`).
+
 ## [2.12.3] — 2026-11-12
 
 ### Added
