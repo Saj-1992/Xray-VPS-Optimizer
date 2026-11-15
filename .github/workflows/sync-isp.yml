@@ -55,6 +55,11 @@ jobs:
               continue
             fi
             cp "/tmp/${id}.asn" "data/isp/asn/${id}.ipv4"
+            # IPv6 prefixes of the same AS (a handful; kept when the fetch looks wrong).
+            curl -fsSL "https://stat.ripe.net/data/announced-prefixes/data.json?resource=${asn}"               | grep -oE '"prefix": *"[0-9a-fA-F:]+/[0-9]+"' | grep -oE '[0-9a-fA-F:]+/[0-9]+'               | sort -u > "/tmp/${id}.asn6" || true
+            if [ "$(wc -l < "/tmp/${id}.asn6")" -ge 1 ]; then
+              cp "/tmp/${id}.asn6" "data/isp/asn/${id}.ipv6"
+            fi
           done
 
       - name: Merge, rebuild and commit if changed

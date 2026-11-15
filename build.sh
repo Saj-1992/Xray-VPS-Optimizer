@@ -61,6 +61,17 @@ emit_isp_data() {
     printf 'ISP_DATA_EOF\n      ;;\n'
   done
   printf '  esac\n}\n'
+  printf '# _isp_embedded6 ID — the bundled IPv6 list of one ISP (empty when it has none).\n'
+  # shellcheck disable=SC2016
+  printf '_isp_embedded6() {\n  case "$1" in\n'
+  for f in "${ROOT_DIR}"/data/isp/*.ipv6; do
+    [[ -f $f ]] || continue
+    id="$(basename "$f" .ipv6)"
+    printf "    %s)\n      cat <<'ISP_DATA_EOF'\n" "$id"
+    cat "$f"
+    printf 'ISP_DATA_EOF\n      ;;\n'
+  done
+  printf '    *) ;;\n  esac\n}\n'
 }
 
 mkdir -p "${ROOT_DIR}/dist"

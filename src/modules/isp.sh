@@ -18,7 +18,8 @@
 #   · your SSH port and the IP of the session applying it are always exempt;
 #   · persistence is a oneshot unit that exits after restoring — no daemon.
 #
-# IPv4 only: the published lists contain IPv4 ranges.
+# IPv6: MCI and Irancell carry IPv6 ranges (data/isp/<id>.ipv6). They are
+# enforced through ip6tables and a second set when the host has IPv6 enabled.
 # ============================================================================
 
 readonly ST_ISP_DIR="${ST_LIB_DIR}/isp"
@@ -26,6 +27,8 @@ readonly ST_ISP_UNIT='/etc/systemd/system/server-tools-isp.service'
 readonly ST_ISP_URL='https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/data/isp'
 readonly ST_ISP_SET='st-isp-list'
 readonly ST_ISP_WL='st-isp-wl'
+readonly ST_ISP_SET6='st-isp-list6'
+readonly ST_ISP_WL6='st-isp-wl6'
 readonly ST_ISP_CHAIN_IN='st-isp-in'
 readonly ST_ISP_CHAIN_FWD='st-isp-fwd'
 readonly -a ST_ISP_IDS=(mci mtn tci rightel shatel asiatech pishgaman mobinnet parsonline)
@@ -70,13 +73,18 @@ _isp_resolve() {
   esac
 }
 
-# _isp_valid_cidr VALUE — an IPv4 address or IPv4 CIDR.
+# _isp_valid_cidr VALUE — an IPv4/IPv6 address or CIDR.
 _isp_valid_cidr() {
-  local ip="${1%%/*}" mask=''
+  local ip="${1%%/*}" mask='' max=32
   [[ $1 == */* ]] && mask="${1#*/}"
-  is_valid_ipv4 "$ip" || return 1
+  if [[ $ip == *:* ]]; then
+    is_valid_ipv6 "$ip" || return 1
+    max=128
+  else
+    is_valid_ipv4 "$ip" || return 1
+  fi
   [[ -z $mask ]] && return 0
-  [[ $mask =~ ^[0-9]+$ ]] && ((mask <= 32))
+  [[ $mask =~ ^[0-9]+$ ]] && ((mask <= max))
 }
 
 # _isp_valid_port VALUE — 1-65535 or an a-b range.
@@ -108,14 +116,67 @@ _isp_csv_valid() {
   return 0
 }
 
-# _isp_session_ip — the client IP of the SSH session running this tool.
+# _isp_session_ip — the client IP (v4 or v6) of the SSH session running this tool.
 _isp_session_ip() {
   local ip
   ip="$(awk '{print $1}' <<<"${SSH_CONNECTION:-}")"
-  if is_valid_ipv4 "$ip"; then
+  if is_valid_ipv4 "$ip" || is_valid_ipv6 "$ip"; then
     printf '%s' "$ip"
   fi
   return 0
+}
+
+# _isp_in_family FAMILY ITEM — does the address/CIDR belong to IPv4 (4) or IPv6 (6)?
+_isp_in_family() {
+  if [[ $1 == 6 ]]; then
+    [[ $2 == *:* ]]
+  else
+    [[ $2 != *:* ]]
+  fi
+}
+
+# _isp_v6_active — IPv6 is worth enforcing: ip6tables exists, IPv6 is switched
+# on, and a blocked ISP has IPv6 ranges.
+_isp_v6_active() {
+  local f=/proc/sys/net/ipv6/conf/all/disable_ipv6
+  has_cmd ip6tables || return 1
+  [[ -r $f && "$(<"$f")" == 0 ]] || return 1
+  [[ -n "$(_isp_ranges 6 | sed -n '1p')" ]]
+}
+
+# _isp_ranges FAMILY — every range of the blocked ISPs, one per line, unique.
+_isp_ranges() {
+  local fam="$1" id ext=ipv4
+  if [[ $fam == 6 ]]; then
+    ext=ipv6
+  fi
+  {
+    while IFS= read -r id; do
+      if [[ -s ${ST_ISP_DIR}/${id}.${ext} ]]; then
+        cat "${ST_ISP_DIR}/${id}.${ext}"
+      fi
+    done < <(_isp_blocked_ids)
+  } | sort -u
+}
+
+# _isp_wl_items FAMILY — addresses that are never blocked: the saved exempt
+# list, the IP of this SSH session, and loopback (so the set is never empty).
+_isp_wl_items() {
+  local fam="$1" item session
+  while IFS= read -r item; do
+    if [[ -n $item ]] && _isp_in_family "$fam" "$item"; then
+      printf '%s\n' "$item"
+    fi
+  done < <(ports_split "$(config_get isp_wl '')")
+  session="$(_isp_session_ip)"
+  if [[ -n $session ]] && _isp_in_family "$fam" "$session"; then
+    printf '%s\n' "$session"
+  fi
+  if [[ $fam == 6 ]]; then
+    printf '::1/128\n'
+  else
+    printf '127.0.0.0/8\n'
+  fi
 }
 
 # --- Blocked set (the single source of truth is the config key isp_ids) ------
@@ -165,6 +226,13 @@ _isp_prepare_lists() {
     if ((reseed)) || [[ ! -s ${ST_ISP_DIR}/${id}.ipv4 ]]; then
       _isp_embedded "$id" >"${ST_ISP_DIR}/${id}.ipv4"
     fi
+    # IPv6 exists only for some ISPs; a new version replaces what was cached.
+    if ((reseed)) || [[ ! -f ${ST_ISP_DIR}/${id}.ipv6 ]]; then
+      _isp_embedded6 "$id" >"${ST_ISP_DIR}/${id}.ipv6"
+      if [[ ! -s ${ST_ISP_DIR}/${id}.ipv6 ]]; then
+        rm -f "${ST_ISP_DIR}/${id}.ipv6"
+      fi
+    fi
   done
   printf '%s\n' "$ST_VERSION" >"$stamp"
 }
@@ -177,14 +245,17 @@ isp_update_lists() {
     return 1
   }
   _isp_prepare_lists
-  local id tmp line n ok=0 failed=0 total=0
+  local id tmp line n ok=0 failed=0 total=0 total6=0
   for id in "${ST_ISP_IDS[@]}"; do
+    if _isp_fetch_list6 "$id"; then
+      total6=$((total6 + $(wc -l <"${ST_ISP_DIR}/${id}.ipv6" | tr -d '[:space:]')))
+    fi
     tmp="${ST_ISP_DIR}/${id}.ipv4.new"
     if curl -fsSL --max-time 30 "${ST_ISP_URL}/${id}.ipv4" -o "$tmp" 2>>"$ST_LOG_FILE"; then
       : >"${tmp}.clean"
       while IFS= read -r line; do
         line="${line//[$'\r ']/}"
-        if [[ -n $line ]] && _isp_valid_cidr "$line"; then
+        if [[ -n $line && $line != *:* ]] && _isp_valid_cidr "$line"; then
           printf '%s\n' "$line" >>"${tmp}.clean"
         fi
       done <"$tmp"
@@ -202,27 +273,58 @@ isp_update_lists() {
     failed=$((failed + 1))
     log_warn "Could not refresh the $(_isp_label "$id") list — keeping the current one."
   done
-  printf 'Lists refreshed: %d of %d (%d ranges).\n' "$ok" "${#ST_ISP_IDS[@]}" "$total"
+  printf 'Lists refreshed: %d of %d (%d IPv4 + %d IPv6 ranges).\n' "$ok" "${#ST_ISP_IDS[@]}" "$total" "$total6"
   ((failed == 0)) || return 3
 }
 
-_isp_count() {
-  local f="${ST_ISP_DIR}/${1}.ipv4"
-  if [[ -s $f ]]; then
-    wc -l <"$f" | tr -d '[:space:]'
-  else
-    _isp_embedded "$1" | wc -l | tr -d '[:space:]'
+# _isp_fetch_list6 ID — refresh one ISP's IPv6 list. Succeeds when the ISP has
+# IPv6 data afterwards (downloaded or already cached). A failed download keeps
+# the cached copy and is not an error: most ISPs have no IPv6 list at all.
+_isp_fetch_list6() {
+  local id="$1" tmp line
+  tmp="${ST_ISP_DIR}/${id}.ipv6.new"
+  if curl -fsSL --max-time 30 "${ST_ISP_URL}/${id}.ipv6" -o "$tmp" 2>>"$ST_LOG_FILE"; then
+    : >"${tmp}.clean"
+    while IFS= read -r line; do
+      line="${line//[$'\r ']/}"
+      if [[ $line == *:* ]] && _isp_valid_cidr "$line"; then
+        printf '%s\n' "${line,,}" >>"${tmp}.clean"
+      fi
+    done <"$tmp"
+    if [[ -s ${tmp}.clean ]]; then
+      mv -f "${tmp}.clean" "${ST_ISP_DIR}/${id}.ipv6"
+    fi
+    rm -f "${tmp}.clean"
   fi
+  rm -f "$tmp"
+  [[ -s ${ST_ISP_DIR}/${id}.ipv6 ]]
+}
+
+# _isp_count ID — number of ranges (IPv4 + IPv6) of one ISP.
+_isp_count() {
+  local f4="${ST_ISP_DIR}/${1}.ipv4" f6="${ST_ISP_DIR}/${1}.ipv6" n4 n6
+  if [[ -s $f4 ]]; then
+    n4="$(wc -l <"$f4" | tr -d '[:space:]')"
+  else
+    n4="$(_isp_embedded "$1" | wc -l | tr -d '[:space:]')"
+  fi
+  if [[ -s $f6 ]]; then
+    n6="$(wc -l <"$f6" | tr -d '[:space:]')"
+  else
+    n6="$(_isp_embedded6 "$1" | wc -l | tr -d '[:space:]')"
+  fi
+  printf '%s' "$((n4 + n6))"
 }
 
 # --- Kernel objects ----------------------------------------------------------
 
-# _isp_load_set NAME < ranges — replace a set's content atomically: fill a
-# scratch set, swap it in, destroy the scratch. Packets never see a half-empty set.
+# _isp_load_set NAME [FAMILY] < ranges — replace a set's content atomically: fill
+# a scratch set, swap it in, destroy the scratch. Packets never see a half-empty
+# set. FAMILY is inet (default) or inet6.
 _isp_load_set() {
-  local name="$1" scratch="${1}-new"
-  ipset create "$name" hash:net family inet maxelem 262144 -exist 2>>"$ST_LOG_FILE" || return 1
-  ipset create "$scratch" hash:net family inet maxelem 262144 -exist 2>>"$ST_LOG_FILE" || return 1
+  local name="$1" scratch="${1}-new" family="${2:-inet}"
+  ipset create "$name" hash:net family "$family" maxelem 262144 -exist 2>>"$ST_LOG_FILE" || return 1
+  ipset create "$scratch" hash:net family "$family" maxelem 262144 -exist 2>>"$ST_LOG_FILE" || return 1
   ipset flush "$scratch" 2>>"$ST_LOG_FILE" || return 1
   local line
   {
@@ -240,36 +342,48 @@ _isp_load_set() {
   return 0
 }
 
-# _isp_load_all — rebuild both sets from the lists and the saved settings.
-_isp_load_all() {
-  local id wl session
-  _isp_prepare_lists
-  {
-    while IFS= read -r id; do
-      if [[ -s ${ST_ISP_DIR}/${id}.ipv4 ]]; then
-        cat "${ST_ISP_DIR}/${id}.ipv4"
-      fi
-    done < <(_isp_blocked_ids)
-  } | sort -u | _isp_load_set "$ST_ISP_SET" || return 1
-
-  wl="$(config_get isp_wl '')"
-  session="$(_isp_session_ip)"
-  {
-    ports_split "$wl"
-    if [[ -n $session ]]; then
-      printf '%s\n' "$session"
-    fi
-    # Never leave the set empty by accident: loopback is harmless to exempt.
-    printf '127.0.0.0/8\n'
-  } | _isp_load_set "$ST_ISP_WL"
+# _isp_set_count NAME — live number of entries in a set (0 when it is missing).
+_isp_set_count() {
+  local n
+  n="$(ipset list "$1" -t 2>/dev/null | awk -F': ' '/Number of entries/ {print $2}')" || n=0
+  printf '%s' "${n:-0}"
 }
 
-# _isp_render_chain CHAIN FLAVOR — the iptables-restore lines for one chain.
-# FLAVOR "in" matches the destination port as seen on INPUT; "fwd" matches the
-# ORIGINAL destination port via conntrack, because Docker has already rewritten
-# it to the container's port by the time DOCKER-USER sees the packet.
+# _isp_fingerprint — the blocked lists as loaded: a checksum of every range plus
+# the live set sizes. Compared by isp_verify, so a list that changed on disk, or
+# a set someone emptied or edited by hand, shows up as drift instead of being
+# trusted just because the rules still exist.
+_isp_fingerprint() {
+  local c4 c6=0 n6=0
+  c4="$(_isp_ranges 4 | cksum | awk '{print $1}')"
+  if _isp_v6_active; then
+    c6="$(_isp_ranges 6 | cksum | awk '{print $1}')"
+    n6="$(_isp_set_count "$ST_ISP_SET6")"
+  fi
+  printf '%s %s %s %s\n' "$c4" "$(_isp_set_count "$ST_ISP_SET")" "$c6" "$n6"
+}
+
+# _isp_load_all — rebuild the sets from the lists and the saved settings.
+_isp_load_all() {
+  _isp_prepare_lists
+  _isp_ranges 4 | _isp_load_set "$ST_ISP_SET" || return 1
+  _isp_wl_items 4 | _isp_load_set "$ST_ISP_WL" || return 1
+  if _isp_v6_active; then
+    _isp_ranges 6 | _isp_load_set "$ST_ISP_SET6" inet6 || return 1
+    _isp_wl_items 6 | _isp_load_set "$ST_ISP_WL6" inet6 || return 1
+  else
+    _isp_teardown_family 6
+  fi
+  _isp_fingerprint >"${ST_ISP_DIR}/.loaded"
+}
+
+# _isp_render_chain CHAIN FLAVOR LISTSET WLSET — the iptables-restore lines for
+# one chain. FLAVOR "in" matches the destination port as seen on INPUT; "fwd"
+# matches the ORIGINAL destination port via conntrack, because Docker has
+# already rewritten it to the container's port by the time DOCKER-USER sees the
+# packet. The same text serves iptables and ip6tables.
 _isp_render_chain() {
-  local chain="$1" flavor="$2"
+  local chain="$1" flavor="$2" lset="$3" wset="$4"
   local ports proto wports ssh_port port p match
   ports="$(config_get isp_ports all)"
   proto="$(config_get isp_proto both)"
@@ -277,7 +391,7 @@ _isp_render_chain() {
   ssh_port="$(detect_ssh_port)"
 
   printf -- '-F %s\n' "$chain"
-  printf -- '-A %s -m set --match-set %s src -j RETURN\n' "$chain" "$ST_ISP_WL"
+  printf -- '-A %s -m set --match-set %s src -j RETURN\n' "$chain" "$wset"
   if [[ $flavor == in ]]; then
     printf -- '-A %s -p tcp --dport %s -j RETURN\n' "$chain" "$ssh_port"
   fi
@@ -296,7 +410,7 @@ _isp_render_chain() {
         fi
       done
     done < <(ports_split "$wports")
-    printf -- '-A %s -m set --match-set %s src -j DROP\n' "$chain" "$ST_ISP_SET"
+    printf -- '-A %s -m set --match-set %s src -j DROP\n' "$chain" "$lset"
     return 0
   fi
 
@@ -316,58 +430,107 @@ _isp_render_chain() {
       else
         match="-p ${p} -m conntrack --ctorigdstport ${port//-/:}"
       fi
-      printf -- '-A %s %s -m set --match-set %s src -j DROP\n' "$chain" "$match" "$ST_ISP_SET"
+      printf -- '-A %s %s -m set --match-set %s src -j DROP\n' "$chain" "$match" "$lset"
     done
   done < <(ports_split "$ports")
   return 0
 }
 
-# _isp_install_rules — (re)create both chains from the saved settings and make
-# sure they are reached from INPUT and, when Docker is present, DOCKER-USER.
-_isp_install_rules() {
-  local chain
+# _isp_hook_first TOOL PARENT CHAIN — make PARENT jump to CHAIN as its FIRST
+# rule. A jump that merely exists is not enough: an earlier "ACCEPT
+# ESTABLISHED" (UFW, Docker, a saved ruleset) would let a blocked ISP's
+# connections through unseen. The `-S` listing starts with the policy / chain
+# line, so the first rule is line 2.
+_isp_hook_first() {
+  local tool="$1" parent="$2" chain="$3"
+  if [[ "$("$tool" -S "$parent" 2>/dev/null | sed -n '2p')" == "-A ${parent} -j ${chain}" ]]; then
+    return 0
+  fi
+  while "$tool" -D "$parent" -j "$chain" 2>/dev/null; do
+    :
+  done
+  "$tool" -I "$parent" 1 -j "$chain" 2>>"$ST_LOG_FILE"
+}
+
+# _isp_install_family FAMILY — (re)create both chains for IPv4 (4) or IPv6 (6)
+# from the saved settings and hook them in: INPUT, and DOCKER-USER when Docker
+# is present.
+_isp_install_family() {
+  local fam="$1" tool=iptables restore=iptables-restore lset="$ST_ISP_SET" wset="$ST_ISP_WL" chain
+  if [[ $fam == 6 ]]; then
+    tool=ip6tables
+    restore=ip6tables-restore
+    lset="$ST_ISP_SET6"
+    wset="$ST_ISP_WL6"
+  fi
   for chain in "$ST_ISP_CHAIN_IN" "$ST_ISP_CHAIN_FWD"; do
-    iptables -n -L "$chain" >/dev/null 2>&1 || iptables -N "$chain" 2>>"$ST_LOG_FILE" || return 1
+    "$tool" -n -L "$chain" >/dev/null 2>&1 || "$tool" -N "$chain" 2>>"$ST_LOG_FILE" || return 1
   done
 
   {
     printf '*filter\n'
-    _isp_render_chain "$ST_ISP_CHAIN_IN" in
-    _isp_render_chain "$ST_ISP_CHAIN_FWD" fwd
+    _isp_render_chain "$ST_ISP_CHAIN_IN" in "$lset" "$wset"
+    _isp_render_chain "$ST_ISP_CHAIN_FWD" fwd "$lset" "$wset"
     printf 'COMMIT\n'
-  } | iptables-restore --noflush 2>>"$ST_LOG_FILE" || return 1
+  } | "$restore" --noflush 2>>"$ST_LOG_FILE" || return 1
 
-  iptables -C INPUT -j "$ST_ISP_CHAIN_IN" 2>/dev/null ||
-    iptables -I INPUT 1 -j "$ST_ISP_CHAIN_IN" 2>>"$ST_LOG_FILE" || return 1
-  if iptables -n -L DOCKER-USER >/dev/null 2>&1; then
-    iptables -C DOCKER-USER -j "$ST_ISP_CHAIN_FWD" 2>/dev/null ||
-      iptables -I DOCKER-USER 1 -j "$ST_ISP_CHAIN_FWD" 2>>"$ST_LOG_FILE" ||
-      log_warn "Could not hook DOCKER-USER — containers' published ports are not covered."
+  _isp_hook_first "$tool" INPUT "$ST_ISP_CHAIN_IN" || return 1
+  if "$tool" -n -L DOCKER-USER >/dev/null 2>&1; then
+    _isp_hook_first "$tool" DOCKER-USER "$ST_ISP_CHAIN_FWD" ||
+      log_warn "Could not hook DOCKER-USER (IPv${fam}) — containers' published ports are not covered."
   fi
   return 0
 }
 
-# _isp_teardown — remove the hooks, chains and sets (the settings stay).
-_isp_teardown() {
-  local chain set_name
-  if has_cmd iptables; then
+# _isp_install_rules — IPv4 always, IPv6 when the host has it switched on.
+_isp_install_rules() {
+  _isp_install_family 4 || return 1
+  if _isp_v6_active; then
+    _isp_install_family 6 || return 1
+  fi
+  return 0
+}
+
+# _isp_teardown_family FAMILY — remove the hooks, chains and set of one family.
+# The hooks go first, so there is never a moment with a chain that is jumped
+# to while half deleted.
+_isp_teardown_family() {
+  local fam="$1" tool=iptables lset="$ST_ISP_SET" wset="$ST_ISP_WL" chain set_name
+  if [[ $fam == 6 ]]; then
+    tool=ip6tables
+    lset="$ST_ISP_SET6"
+    wset="$ST_ISP_WL6"
+  fi
+  if has_cmd "$tool"; then
     # Either hook may already be gone, or Docker may not exist at all.
-    iptables -D INPUT -j "$ST_ISP_CHAIN_IN" 2>/dev/null || true
-    iptables -D DOCKER-USER -j "$ST_ISP_CHAIN_FWD" 2>/dev/null || true
+    while "$tool" -D INPUT -j "$ST_ISP_CHAIN_IN" 2>/dev/null; do
+      :
+    done
+    while "$tool" -D DOCKER-USER -j "$ST_ISP_CHAIN_FWD" 2>/dev/null; do
+      :
+    done
     for chain in "$ST_ISP_CHAIN_IN" "$ST_ISP_CHAIN_FWD"; do
-      if iptables -n -L "$chain" >/dev/null 2>&1; then
-        iptables -F "$chain" 2>>"$ST_LOG_FILE"
-        iptables -X "$chain" 2>>"$ST_LOG_FILE" || log_warn "Could not delete chain ${chain}."
+      if "$tool" -n -L "$chain" >/dev/null 2>&1; then
+        "$tool" -F "$chain" 2>>"$ST_LOG_FILE"
+        "$tool" -X "$chain" 2>>"$ST_LOG_FILE" || log_warn "Could not delete chain ${chain} (IPv${fam})."
       fi
     done
   fi
   if has_cmd ipset; then
-    for set_name in "$ST_ISP_SET" "$ST_ISP_WL"; do
+    for set_name in "$lset" "$wset"; do
       if ipset list -n 2>/dev/null | grep -qx "$set_name"; then
         ipset destroy "$set_name" 2>>"$ST_LOG_FILE" || log_warn "Could not destroy set ${set_name}."
       fi
     done
   fi
+}
+
+# _isp_teardown — remove everything the blocker put into the kernel (both
+# families) and its boot unit. The saved settings stay.
+_isp_teardown() {
+  _isp_teardown_family 4
+  _isp_teardown_family 6
+  rm -f "${ST_ISP_DIR}/.loaded"
   if [[ -f $ST_ISP_UNIT ]] && has_cmd systemctl; then
     systemctl disable server-tools-isp.service >/dev/null 2>>"$ST_LOG_FILE" ||
       log_warn "Could not disable the boot unit."
@@ -425,6 +588,27 @@ _isp_migrate() {
   config_set isp_mode ''
 }
 
+# _isp_saved_rules_file — a saved firewall file (netfilter-persistent, iptables-
+# services) that contains our rules. It is loaded at boot BEFORE the ipsets
+# exist, which makes the whole restore fail; the blocker brings itself back via
+# its own unit and needs no such copy.
+_isp_saved_rules_file() {
+  local f
+  for f in /etc/iptables/rules.v4 /etc/iptables/rules.v6 /etc/sysconfig/iptables /etc/sysconfig/ip6tables; do
+    if [[ -f $f ]] && grep -q 'st-isp' "$f"; then
+      printf '%s' "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
+_isp_saved_rules_warn() {
+  local f
+  f="$(_isp_saved_rules_file)" || return 0
+  log_warn "${f} contains ServerTools rules (st-isp-*). At boot it is loaded before the ipsets exist and the whole saved firewall can fail to load. Remove those lines, or save the firewall again while nothing is blocked (st isp none)."
+}
+
 # isp_apply — make the host match the saved settings. Empty set = no blocking.
 # 0 ok, 3 applied with a warning, 1 failed.
 isp_apply() {
@@ -458,6 +642,10 @@ isp_apply() {
     return 1
   }
   _isp_write_unit || rc=3
+  if [[ -n "$(_isp_ranges 6 | sed -n '1p')" ]] && ! _isp_v6_active; then
+    log_info "IPv6 is not enabled on this host — only the IPv4 ranges are enforced."
+  fi
+  _isp_saved_rules_warn
   isp_verify || rc=3
   log_info "ISP blocker applied (isps=$(config_get isp_ids ''), ports=$(config_get isp_ports all), rc=${rc})."
   return "$rc"
@@ -471,15 +659,42 @@ isp_restore() {
   _isp_load_all && _isp_install_rules
 }
 
+# _isp_verify_family FAMILY — 0 when this family's rules are in effect, else 3.
+# "In effect" means more than "the chain exists": the jump must be the FIRST
+# rule of INPUT (and of DOCKER-USER when Docker is there), the chain must
+# really DROP on the set, and the set must hold entries.
+_isp_verify_family() {
+  local fam="$1" tool=iptables lset="$ST_ISP_SET" out
+  if [[ $fam == 6 ]]; then
+    tool=ip6tables
+    lset="$ST_ISP_SET6"
+  fi
+  has_cmd "$tool" || return 3
+  "$tool" -n -L "$ST_ISP_CHAIN_IN" >/dev/null 2>&1 || return 3
+  out="$("$tool" -S INPUT 2>/dev/null | sed -n '2p')"
+  [[ $out == "-A INPUT -j ${ST_ISP_CHAIN_IN}" ]] || return 3
+  out="$("$tool" -S "$ST_ISP_CHAIN_IN" 2>/dev/null)"
+  [[ $out == *"--match-set ${lset} src -j DROP"* ]] || return 3
+  if "$tool" -n -L DOCKER-USER >/dev/null 2>&1; then
+    out="$("$tool" -S DOCKER-USER 2>/dev/null | sed -n '2p')"
+    [[ $out == "-A DOCKER-USER -j ${ST_ISP_CHAIN_FWD}" ]] || return 3
+  fi
+  (($(_isp_set_count "$lset") > 0)) || return 3
+  return 0
+}
+
 # isp_verify — 0 in effect, 2 not configured, 3 drifted (Doctor contract).
 isp_verify() {
+  local saved
   [[ -n "$(config_get isp_ids '')" ]] || return 2
   has_cmd iptables && has_cmd ipset || return 3
-  iptables -C INPUT -j "$ST_ISP_CHAIN_IN" 2>/dev/null || return 3
-  iptables -n -L "$ST_ISP_CHAIN_IN" >/dev/null 2>&1 || return 3
-  local count
-  count="$(ipset list "$ST_ISP_SET" -t 2>/dev/null | awk -F': ' '/Number of entries/ {print $2}')" || count=0
-  [[ $count =~ ^[0-9]+$ ]] && ((count > 0)) || return 3
+  _isp_verify_family 4 || return 3
+  if _isp_v6_active; then
+    _isp_verify_family 6 || return 3
+  fi
+  # The lists on disk and the live sets must still be what was loaded.
+  saved="$(cat "${ST_ISP_DIR}/.loaded" 2>/dev/null)" || saved=''
+  [[ $saved == "$(_isp_fingerprint)" ]] || return 3
   return 0
 }
 
@@ -531,8 +746,7 @@ _isp_toggled() {
   done
   for id in "${ST_ISP_IDS[@]}"; do
     if [[ $csv == *",${id},"* ]]; then
-      printf '%s
-' "$id"
+      printf '%s\n' "$id"
     fi
   done
 }
@@ -553,6 +767,10 @@ _isp_drops() {
   local n
   n="$(iptables -nvxL "$ST_ISP_CHAIN_IN" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')"
   n=$((n + $(iptables -nvxL "$ST_ISP_CHAIN_FWD" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')))
+  if has_cmd ip6tables; then
+    n=$((n + $(ip6tables -nvxL "$ST_ISP_CHAIN_IN" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')))
+    n=$((n + $(ip6tables -nvxL "$ST_ISP_CHAIN_FWD" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')))
+  fi
   printf '%s' "$n"
 }
 
@@ -585,12 +803,98 @@ isp_status() {
   ui_kv "Blocked" "${names%, }"
   ui_kv "Scope" "$(_isp_scope_text)"
   ui_kv "Always allowed" "SSH port $(detect_ssh_port), $(config_get isp_wl 'no extra IPs')"
+  ui_kv "IPv4 ranges" "$(_isp_set_count "$ST_ISP_SET") blocked"
+  if [[ -n "$(_isp_ranges 6 | sed -n '1p')" ]]; then
+    if _isp_v6_active; then
+      ui_kv "IPv6 ranges" "$(_isp_set_count "$ST_ISP_SET6") blocked"
+    else
+      ui_kv "IPv6 ranges" "not enforced (IPv6 is off on this host)"
+    fi
+  fi
   ui_kv "Packets dropped" "$(_isp_drops)"
   if isp_verify; then
     printf '%s  rules in effect%s\n' "$C_OK" "$C_RESET"
   else
-    printf '%s  rules are NOT fully in effect — pick any ISP number to re-apply%s\n' "$C_WARN" "$C_RESET"
+    printf '%s  rules are NOT fully in effect — run: st isp update   (or pick any ISP number in the menu)%s\n' "$C_WARN" "$C_RESET"
   fi
+  local saved
+  if saved="$(_isp_saved_rules_file)"; then
+    printf '%s  note: %s contains ServerTools rules (st-isp-*) and can break the boot-time firewall load; remove those lines%s\n' "$C_WARN" "$saved" "$C_RESET"
+  fi
+}
+
+# _isp_list_has FAMILY IP ID — is IP inside one of ISP ID's cached/embedded ranges?
+# IPv4 is a plain numeric comparison; IPv6 goes through a scratch ipset.
+_isp_list_has() {
+  local fam="$1" ip="$2" id="$3" tmp="st-isp-chk" src res=1 ext=ipv4
+  if [[ $fam == 6 ]]; then
+    ext=ipv6
+  fi
+  src="${ST_ISP_DIR}/${id}.${ext}"
+  [[ -s $src ]] || return 1
+  if [[ $fam == 4 ]]; then
+    awk -v ip="$ip" '
+      function n(s, a) { split(s, a, "."); return ((a[1] * 256 + a[2]) * 256 + a[3]) * 256 + a[4] }
+      BEGIN { t = n(ip) }
+      {
+        split($0, c, "/")
+        m = (c[2] == "" ? 32 : c[2]); sz = 2 ^ (32 - m); b = n(c[1]); b -= b % sz
+        if (t >= b && t < b + sz) { f = 1; exit }
+      }
+      END { exit !f }' "$src"
+    return
+  fi
+  has_cmd ipset || return 1
+  ipset create "$tmp" hash:net family inet6 -exist 2>/dev/null || return 1
+  ipset flush "$tmp" 2>/dev/null
+  if awk -v s="$tmp" '{print "add " s " " $0}' "$src" | ipset restore -exist 2>/dev/null; then
+    ipset test "$tmp" "$ip" >/dev/null 2>&1 && res=0
+  fi
+  ipset destroy "$tmp" 2>/dev/null
+  return "$res"
+}
+
+# isp_check IP — "why does this address still connect?" Shows which ISP lists
+# contain it, whether the live rules drop it, and whether it is exempt.
+isp_check() {
+  local ip="${1:-}" fam=4 id found=0 live=''
+  if is_valid_ipv6 "$ip"; then
+    fam=6
+  elif ! is_valid_ipv4 "$ip"; then
+    die "Usage: st isp check IP   (an IPv4 or IPv6 address)"
+  fi
+  _isp_prepare_lists
+  ui_section "Iran ISP blocker — ${ip}"
+  for id in "${ST_ISP_IDS[@]}"; do
+    if _isp_list_has "$fam" "$ip" "$id"; then
+      found=1
+      if _isp_is_blocked "$id"; then
+        ui_kv "In list" "$(_isp_label "$id") — BLOCKED"
+      else
+        ui_kv "In list" "$(_isp_label "$id") — open (not blocked)"
+      fi
+    fi
+  done
+  if ((found == 0)); then
+    printf 'Not in any ISP list — the blocker cannot stop this address.\n'
+    printf 'Find its owner with: whois %s   (its AS / holder tells which range to add)\n' "$ip"
+  fi
+  if has_cmd ipset; then
+    local lset="$ST_ISP_SET" wset="$ST_ISP_WL"
+    if [[ $fam == 6 ]]; then
+      lset="$ST_ISP_SET6"
+      wset="$ST_ISP_WL6"
+    fi
+    if ipset test "$wset" "$ip" >/dev/null 2>&1; then
+      live="exempt (never blocked: your IP, the exempt list or loopback)"
+    elif ipset test "$lset" "$ip" >/dev/null 2>&1; then
+      live="DROPPED by the live rules"
+    else
+      live="not matched by the live rules"
+    fi
+    ui_kv "Live rules" "$live"
+  fi
+  return 0
 }
 
 # --- Menu --------------------------------------------------------------------
@@ -675,8 +979,8 @@ _isp_draw_menu() {
   ui_hr
   printf '  %sType numbers to flip them%s (e.g. %s1 3 5%s) — each one toggles blocked/open.\n' \
     "$C_MUTED" "$C_RESET" "$C_KEY" "$C_RESET"
-  printf '  %sa%s block all   %sn%s open all   %sp%s ports   %sw%s exempt IPs   %su%s update lists   %s0%s back\n' \
-    "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET"
+  printf '  %sa%s block all   %sn%s open all   %sp%s ports   %sw%s exempt IPs   %su%s update lists   %sc%s check an IP   %s0%s back\n' \
+    "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET"
 }
 
 # _isp_report_change BEFORE AFTER — one friendly line about what changed.
@@ -721,6 +1025,14 @@ isp_menu() {
         ui_pause
         continue
         ;;
+      c)
+        read -rp "IP address to look up: " tok || tok=''
+        if [[ -n $tok ]]; then
+          isp_check "${tok// /}" || true
+          ui_pause
+        fi
+        continue
+        ;;
     esac
 
     before="$(config_get isp_ids '')"
@@ -734,8 +1046,7 @@ isp_menu() {
           if id="$(_isp_resolve "$tok")"; then
             flip+=("$id")
           else
-            printf '%sUnknown choice "%s" — ignored.%s
-' "$C_WARN" "$tok" "$C_RESET"
+            printf '%sUnknown choice "%s" — ignored.%s\n' "$C_WARN" "$tok" "$C_RESET"
           fi
         done
         if ((${#flip[@]} == 0)); then
@@ -749,11 +1060,9 @@ isp_menu() {
     after="$(config_get isp_ids '')"
     _isp_report_change "$before" "$after"
     if ((rc == 1)); then
-      printf '%sCould not apply — see the message above. The choice is saved; pick any ISP to retry.%s
-' "$C_ERR" "$C_RESET"
+      printf '%sCould not apply — see the message above. The choice is saved; pick any ISP to retry.%s\n' "$C_ERR" "$C_RESET"
     elif ((rc == 3)); then
-      printf '%sApplied, with a warning (see above).%s
-' "$C_WARN" "$C_RESET"
+      printf '%sApplied, with a warning (see above).%s\n' "$C_WARN" "$C_RESET"
     fi
     sleep 1
   done
@@ -780,6 +1089,7 @@ isp_cli() {
   esac
   case "$sub" in
     status) isp_status ;;
+    check) isp_check "$list" ;;
     block) isp_block "${ids[@]}" ;;
     unblock) isp_unblock "${ids[@]}" ;;
     set) isp_set_blocked "${ids[@]}" ;;
@@ -792,6 +1102,6 @@ isp_cli() {
         isp_apply
       fi
       ;;
-    *) die "Usage: st isp status | block LIST | unblock LIST | set LIST | all | none | reset | update" ;;
+    *) die "Usage: st isp status | check IP | block LIST | unblock LIST | set LIST | all | none | reset | update" ;;
   esac
 }

@@ -57,4 +57,13 @@ for list in "${ROOT_DIR}"/data/isp/*.ipv4; do
   grep -qxF "$(sed -n 1p "$list")" "$DIST" || fail "$list is not embedded in dist"
 done
 
+for list in "${ROOT_DIR}"/data/isp/*.ipv6; do
+  [[ -f $list ]] || continue
+  [[ -s $list ]] || fail "empty IPv6 list: $list"
+  if grep -qvE '^[0-9a-f:]+:[0-9a-f:]*/[0-9]{1,3}$' "$list"; then
+    fail "malformed line in $list"
+  fi
+  grep -qxF "$(sed -n 1p "$list")" "$DIST" || fail "$list is not embedded in dist"
+done
+
 printf 'smoke: OK (v%s)\n' "$VERSION"

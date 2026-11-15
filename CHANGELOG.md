@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.13.0] — 2026-11-15
+
+### Added
+
+- **IPv6 for the ISP blocker.** MCI and Irancell publish IPv6 ranges (2a02:4540::/29 and 2a01:5ec0::/29 plus their announced prefixes); users coming over IPv6 used to bypass the block. They are now enforced with ip6tables and a second ipset whenever the host has IPv6 enabled, and torn down again when it is switched off. New data: `data/isp/<id>.ipv6`, refreshed by the weekly sync and by `st isp update`.
+- **`st isp check IP`** (and `c` in the menu): which ISP list contains an address, whether that ISP is blocked, and whether the live rules drop it — or why not (exempt, or in no list, with a pointer to whois).
+- Block/unblock safety:
+  - the blocker's jump is kept as the **first** rule of INPUT and DOCKER-USER; before, an earlier ACCEPT rule (UFW, Docker, a saved ruleset) could let a blocked ISP through while everything looked fine;
+  - verification now also checks that the chain really DROPs on the set, that the set still equals the lists on disk (checksum and size recorded at load) and the Docker hook;
+  - a saved firewall file (rules.v4 etc.) that contains our rules is reported, because it is restored at boot before the ipsets exist and can make the whole restore fail;
+  - teardown removes every duplicate hook, for both address families.
+
+### Fixed
+
+- **Mobinnet and TCI customers were blocked as MCI/Irancell.** The ranges added in 2.12.4 from the RIPE database included space that BGP shows announced by Mobinnet (AS50810: 178.131.0.0/18, 178.131.64.0/19, 178.131.96.0/20, 178.131.112.0/21, 178.131.128.0/18, 37.98.112.0/21, 188.211.0.0/20, 188.212.240.0/21, 188.213.192.0/22) and by TCI (AS58224: 185.115.76.0/23, 185.115.78.0/24). They are removed; block the respective ISP separately. Checked against 649 observed networks (300 MCI, 214 Irancell): all covered, none attributed to another ISP.
+- Interactive messages that printed a stray line break in the middle of a format string.
+
 ## [2.12.4] — 2026-11-13
 
 ### Added
