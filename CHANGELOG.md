@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.4] — 2026-11-16
+
+### Fixed
+
+- ShellCheck SC2178 in the new SSH-only scope check (a variable name that clashed with an array elsewhere); no behaviour change. CI is green again.
+
 ## [2.14.3] — 2026-11-16
 
 ### Added

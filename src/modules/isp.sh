@@ -740,14 +740,14 @@ isp_verify() {
 # _isp_scope_is_ssh_only PORTS — true when the scope names nothing but the SSH
 # port. That port is always exempt, so such a scope blocks nothing at all.
 _isp_scope_is_ssh_only() {
-  local ssh_port port seen=0
+  local ssh_port port any=0
   ssh_port="$(detect_ssh_port)"
   while IFS= read -r port; do
     [[ -n $port ]] || continue
-    seen=1
+    any=1
     [[ $port == "$ssh_port" ]] || return 1
   done < <(ports_split "$1")
-  ((seen == 1))
+  ((any == 1))
 }
 
 # isp_set_scope VALUE — "all", or a port list such as 443,8443 / 10000-20000.
