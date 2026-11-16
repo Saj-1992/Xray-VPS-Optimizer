@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.3] — 2026-11-16
+
+### Added
+
+- **`st isp scope all | PORTS`** sets what the blocked ISPs are kept away from from the command line (before, only the menu could).
+- **Existing connections are ended when a block is applied.** The rules drop an ISP's packets at once, but a socket that was already open stayed ESTABLISHED for hours and kept showing in `st isp live`. Applying the block now ends them (`ss -K`), only when all ports are blocked, never on the SSH port or for exempt addresses, and reports how many addresses it cleared — or says plainly when the kernel cannot do it.
+
+### Fixed
+
+- **A scope that names only the SSH port blocked nothing.** The SSH port is always exempt, so "tcp+udp 22" meant every MCI connection stayed open (found on a server whose scope had been set to 22). Status now says so in red, the menu and `st isp scope` refuse such a scope, and the fix is `st isp scope all`.
+
 ## [2.14.2] — 2026-11-16
 
 ### Fixed

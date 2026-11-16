@@ -15,7 +15,7 @@ Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
   go                    One key: detect, optimize, show health — no questions
                         (accepts --users / --qdisc / --dns / --profile)
-  isp SUB [LIST]        Iran ISP blocker: status | live | check IP | block mci,mtn | unblock mtn | set LIST | all | none | update
+  isp SUB [LIST]        Iran ISP blocker: status | live | check IP | scope all|443,8443 | block mci,mtn | unblock mtn | set LIST | all | none | update
                         live = connections per ISP now (add --watch, --interval N, --port 443,8443)
   setup APP             Install a panel/node with its official installer: pg-node | xui | status
   isp-restore           Reload the Iran ISP blocker from its saved settings (boot unit)
