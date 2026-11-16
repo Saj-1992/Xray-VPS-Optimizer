@@ -979,8 +979,8 @@ _isp_draw_menu() {
   ui_hr
   printf '  %sType numbers to flip them%s (e.g. %s1 3 5%s) — each one toggles blocked/open.\n' \
     "$C_MUTED" "$C_RESET" "$C_KEY" "$C_RESET"
-  printf '  %sa%s block all   %sn%s open all   %sp%s ports   %sw%s exempt IPs   %su%s update lists   %sc%s check an IP   %s0%s back\n' \
-    "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET"
+  printf '  %sa%s block all   %sn%s open all   %sp%s ports   %sw%s exempt IPs   %su%s update lists   %sc%s check an IP   %sl%s live connections   %s0%s back\n' \
+    "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET" "$C_KEY" "$C_RESET"
 }
 
 # _isp_report_change BEFORE AFTER — one friendly line about what changed.
@@ -1023,6 +1023,12 @@ isp_menu() {
         isp_update_lists || true
         isp_apply || true
         ui_pause
+        continue
+        ;;
+      l)
+        ST_LIVE_WATCH=1
+        isp_live || true
+        ST_LIVE_WATCH=0
         continue
         ;;
       c)
@@ -1090,6 +1096,7 @@ isp_cli() {
   case "$sub" in
     status) isp_status ;;
     check) isp_check "$list" ;;
+    live) isp_live ;;
     block) isp_block "${ids[@]}" ;;
     unblock) isp_unblock "${ids[@]}" ;;
     set) isp_set_blocked "${ids[@]}" ;;
@@ -1102,6 +1109,6 @@ isp_cli() {
         isp_apply
       fi
       ;;
-    *) die "Usage: st isp status | check IP | block LIST | unblock LIST | set LIST | all | none | reset | update" ;;
+    *) die "Usage: st isp status | live | check IP | block LIST | unblock LIST | set LIST | all | none | reset | update" ;;
   esac
 }

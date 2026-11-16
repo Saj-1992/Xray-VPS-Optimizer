@@ -636,7 +636,7 @@ tools_menu() {
     ui_menu_item 6 "Docker + UFW audit" "check the firewall bypass"
     ui_menu_group "System"
     ui_menu_item 7 "Support report" "full plain-text dump"
-    ui_menu_item d "Node & Docker" "config backup · container limits"
+    ui_menu_item d "Panels, nodes & Docker" "install Pasarguard node / x-ui · backup · limits"
     ui_menu_item s "Settings" "install 'st' · update · paths"
     ui_menu_item 0 "Back"
     read -rp "$(_ui_prompt)" choice || return 0

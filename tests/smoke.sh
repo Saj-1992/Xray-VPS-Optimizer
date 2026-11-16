@@ -49,6 +49,8 @@ bash "$DIST" --help | grep -q -- ' go ' || fail "--help should document go"
 
 # The ISP address lists must be embedded and well-formed.
 bash "$DIST" --help | grep -q -- 'isp SUB' || fail "--help should document isp"
+bash "$DIST" --help | grep -q -- 'setup APP' || fail "--help should document setup"
+bash "$DIST" --help | grep -q -- '--watch' || fail "--help should document isp live --watch"
 for list in "${ROOT_DIR}"/data/isp/*.ipv4; do
   [[ -s $list ]] || fail "empty ISP list: $list"
   if grep -qvE '^([0-9]{1,3}[.]){3}[0-9]{1,3}(/([0-9]|[12][0-9]|3[0-2]))?$' "$list"; then

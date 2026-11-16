@@ -15,7 +15,9 @@ Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
   go                    One key: detect, optimize, show health — no questions
                         (accepts --users / --qdisc / --dns / --profile)
-  isp SUB [LIST]        Iran ISP blocker: status | check IP | block mci,mtn | unblock mtn | set LIST | all | none | update
+  isp SUB [LIST]        Iran ISP blocker: status | live | check IP | block mci,mtn | unblock mtn | set LIST | all | none | update
+                        live = connections per ISP now (add --watch, --interval N, --port 443,8443)
+  setup APP             Install a panel/node with its official installer: pg-node | xui | status
   isp-restore           Reload the Iran ISP blocker from its saved settings (boot unit)
   repair                Make sure every setting comes back after a reboot (re-enable units)
   boost                 Re-apply proxy priority to running services/containers
@@ -69,7 +71,7 @@ _need_value() { # _need_value OPTION VALUE
 }
 
 main() {
-  local action="menu" tuning_opts=''
+  local action="menu" tuning_opts='' ST_SETUP_APP='status'
   while (($# > 0)); do
     case "$1" in
       -v | --version)
@@ -88,6 +90,13 @@ main() {
       boost | --boost) action="boost" ;;
       repair | --repair) action="repair" ;;
       isp-restore) action="isp_restore" ;;
+      setup)
+        action="setup"
+        if [[ -n ${2:-} && $2 != -* ]]; then
+          ST_SETUP_APP="$2"
+          shift
+        fi
+        ;;
       isp)
         action="isp"
         if [[ -n ${2:-} && $2 != -* ]]; then
@@ -158,6 +167,21 @@ main() {
         ST_AUTO_PERF=0
         tuning_opts='yes'
         ;;
+      -w | --watch) ST_LIVE_WATCH=1 ;;
+      --interval)
+        _need_value "$1" "${2:-}"
+        shift
+        if [[ ! $1 =~ ^[0-9]+$ ]] || (($1 < 1 || $1 > 3600)); then
+          printf 'Invalid --interval %s (1-3600 seconds)\n' "$1" >&2
+          exit 2
+        fi
+        ST_LIVE_INTERVAL="$1"
+        ;;
+      --port)
+        _need_value "$1" "${2:-}"
+        shift
+        ST_LIVE_PORTS="$1"
+        ;;
       --json) ST_OPT_JSON=1 ;;
       --no-color) ST_OPT_NO_COLOR=1 ;;
       --debug) ST_OPT_DEBUG=1 ;;
@@ -205,6 +229,10 @@ main() {
     isp)
       ST_OPT_BATCH=1
       isp_cli "$ST_ISP_SUB" "$ST_ISP_LIST" || st_escalate_exit $?
+      ;;
+    setup)
+      ST_OPT_BATCH=1
+      app_cli "$ST_SETUP_APP" || st_escalate_exit $?
       ;;
     isp_restore)
       ST_OPT_BATCH=1

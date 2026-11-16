@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.0] — 2026-11-16
+
+### Added
+
+- **`st isp live`** — how many connections each Iranian ISP has to this server right now: connections, distinct addresses, share bar, and for a blocked ISP whether anything is still connected. It reads the kernel socket table (`ss`) and the same address lists the blocker uses, so there is no capture and no extra service; ~0.8 s for 8,000 sockets. `--watch` refreshes every few seconds (`--interval N`, `q` quits) and shows the blocked-packet rate; `--port 443,8443` narrows it to some local ports. Also `l` in the ISP menu. The SSH port is left out unless you ask for it with `--port`.
+- **Panels and nodes**: `st setup pg-node` installs a **Pasarguard node** and `st setup xui` installs the **x-ui panel (alireza0)**, each with the project's own official installer; `st setup status` shows what is installed. The installer is downloaded over HTTPS, must be a complete shell script (`bash -n`), is shown with its source URL and sha256, and (in the menu) needs a confirmation before it runs. Already-installed apps are not reinstalled; the project's own upkeep command is shown instead. In the menu: Tools → Panels, nodes & Docker (items 3 and 4). These installations are not undone by `st --rollback`.
+
+### Fixed
+
+- The Pasarguard installer URL used by the upstream project (`scripts/master/node.sh`) no longer exists; the current one is `scripts/main/pg-node.sh`.
+
 ## [2.13.0] — 2026-11-15
 
 ### Added
