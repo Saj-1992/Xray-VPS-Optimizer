@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.2] — 2026-11-16
+
+### Fixed
+
+- **After `st --update` (or `st --install` over an older version) the ISP blocker showed "rules are NOT fully in effect"** until it was applied again: the new version brings newer address lists, but the sets in the kernel still held the old ones. The blocker is now reloaded with the new lists as part of the update, and the result is reported ("ISP blocker reloaded with the new address lists").
+
 ## [2.14.1] — 2026-11-16
 
 ### Fixed

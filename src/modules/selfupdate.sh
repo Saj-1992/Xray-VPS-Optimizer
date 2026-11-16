@@ -66,6 +66,19 @@ _self_download() {
   mv -f "$tmp" "$dest"
 }
 
+# _self_reload_isp COMMAND — the blocker's sets are built from the address
+# lists, and a new version carries newer lists: rebuild them now instead of
+# leaving the old ones loaded (Doctor would report the difference as drift
+# until someone re-applied). COMMAND is the freshly installed st.
+_self_reload_isp() {
+  [[ -n "$(config_get isp_ids '')" ]] || return 0
+  if "$1" isp-restore; then
+    printf 'ISP blocker reloaded with the new address lists.\n'
+  else
+    log_warn "Could not reload the ISP blocker — run: st isp update"
+  fi
+}
+
 st_self_install() {
   local src
   mkdir -p "$(dirname "$ST_INSTALL_PATH")"
@@ -81,6 +94,7 @@ st_self_install() {
   printf '%sInstalled.%s Run %sst%s from now on; update anytime with: st --update\n' \
     "$C_OK" "$C_RESET" "$C_KEY" "$C_RESET"
   log_info "Installed to ${ST_INSTALL_PATH} (v${ST_VERSION})."
+  _self_reload_isp "$ST_INSTALL_PATH"
 }
 
 st_self_update() {
@@ -112,6 +126,8 @@ st_self_update() {
   chmod 755 "$target"
   printf '%sUpdated:%s v%s -> v%s (%s)\n' "$C_OK" "$C_RESET" "$ST_VERSION" "$new_ver" "$target"
   log_info "Self-updated: v${ST_VERSION} -> v${new_ver}."
+
+  _self_reload_isp "$target"
 }
 
 # --- Update notice ---------------------------------------------------------
