@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.1] — 2026-11-16
+
+### Fixed
+
+- **Security → Iran ISP blocker (menu) printed `ERROR unhandled failure` lines** on hosts where IPv6 is not enforced (2.13.0 and 2.14.0). The "packets dropped" counter listed the IPv6 chains, which do not exist there, and the failed listing counted as an error. A missing chain now simply counts as zero drops; `st isp status` and `st isp live` use the same code.
+
 ## [2.14.0] — 2026-11-16
 
 ### Added

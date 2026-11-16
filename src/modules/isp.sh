@@ -763,13 +763,21 @@ isp_remove() {
 
 # --- Status ------------------------------------------------------------------
 
+# _isp_chain_drops TOOL CHAIN — packets dropped by one chain. A chain that does
+# not exist (IPv6 is not enforced on this host, or nothing is blocked yet) is
+# not an error: it has dropped nothing. Listing failing must not fail the
+# pipeline, so the listing is captured first and only counted afterwards.
+_isp_chain_drops() {
+  local out
+  out="$("$1" -nvxL "$2" 2>/dev/null)" || out=''
+  awk '/DROP/ {p += $1} END {print p + 0}' <<<"$out"
+}
+
 _isp_drops() {
   local n
-  n="$(iptables -nvxL "$ST_ISP_CHAIN_IN" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')"
-  n=$((n + $(iptables -nvxL "$ST_ISP_CHAIN_FWD" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')))
+  n=$(($(_isp_chain_drops iptables "$ST_ISP_CHAIN_IN") + $(_isp_chain_drops iptables "$ST_ISP_CHAIN_FWD")))
   if has_cmd ip6tables; then
-    n=$((n + $(ip6tables -nvxL "$ST_ISP_CHAIN_IN" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')))
-    n=$((n + $(ip6tables -nvxL "$ST_ISP_CHAIN_FWD" 2>/dev/null | awk '/DROP/ {p += $1} END {print p + 0}')))
+    n=$((n + $(_isp_chain_drops ip6tables "$ST_ISP_CHAIN_IN") + $(_isp_chain_drops ip6tables "$ST_ISP_CHAIN_FWD")))
   fi
   printf '%s' "$n"
 }
