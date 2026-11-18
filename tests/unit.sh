@@ -6,7 +6,7 @@
 # stubbed. Run: ./tests/unit.sh   (also run by CI and `make test`)
 # ============================================================================
 # The stubs below are called indirectly by the code under test.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 set -u
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="${ROOT_DIR}/dist/server-tools.sh"
