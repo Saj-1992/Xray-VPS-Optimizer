@@ -293,6 +293,54 @@ _isp_toggled() {
   done
 }
 
+# isp_allow CSV / isp_unallow CSV — manage persistent whitelist IPs/CIDRs.
+isp_allow() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked isp_allow "$@"
+    return
+  fi
+  local raw="${1:-}" item wl
+  raw="${raw// /}"
+  [[ -n $raw ]] || die "Usage: st isp allow IP[,CIDR,...]"
+  _isp_csv_valid cidr "$raw" || die "Invalid IP/CIDR list '${1}'."
+  wl="$(config_get isp_wl '')"
+  while IFS= read -r item; do
+    [[ -n $item ]] || continue
+    if [[ ",${wl}," != *",${item},"* ]]; then
+      wl="${wl:+${wl},}${item}"
+    fi
+  done < <(ports_split "$raw")
+  config_set isp_wl "$wl"
+  printf '%sWhitelist:%s %s\n' "$C_OK" "$C_RESET" "${wl:-none}"
+  if [[ -n "$(config_get isp_ids '')" ]]; then
+    isp_apply
+  fi
+}
+
+isp_unallow() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked isp_unallow "$@"
+    return
+  fi
+  local raw="${1:-}" item wl='' drop
+  raw="${raw// /}"
+  [[ -n $raw ]] || die "Usage: st isp unallow IP[,CIDR,...]"
+  _isp_csv_valid cidr "$raw" || die "Invalid IP/CIDR list '${1}'."
+  while IFS= read -r item; do
+    [[ -n $item ]] || continue
+    drop=0
+    if [[ ",${raw}," == *",${item},"* ]]; then
+      drop=1
+    fi
+    ((drop == 0)) && wl="${wl:+${wl},}${item}"
+  done < <(ports_split "$(config_get isp_wl '')")
+  config_set isp_wl "$wl"
+  printf '%sWhitelist:%s %s\n' "$C_OK" "$C_RESET" "${wl:-none}"
+  if [[ -n "$(config_get isp_ids '')" ]]; then
+    isp_apply
+  fi
+}
+
 # isp_remove — unblock everything and forget the settings.
 isp_remove() {
   if [[ ${ST_LOCKED:-0} != 1 ]]; then
@@ -643,6 +691,8 @@ isp_cli() {
     set) isp_set_blocked "${ids[@]}" ;;
     all) isp_set_blocked "${ST_ISP_IDS[@]}" ;;
     none) isp_set_blocked ;;
+    allow) isp_allow "$list" ;;
+    unallow) isp_unallow "$list" ;;
     reset) isp_remove ;;
     update)
       isp_update_lists
@@ -650,6 +700,6 @@ isp_cli() {
         isp_apply
       fi
       ;;
-    *) die "Usage: st isp status | live | check IP | scope PORTS | block LIST | unblock LIST | set LIST | all | none | reset | update" ;;
+    *) die "Usage: st isp status | live | check IP | scope PORTS | block LIST | unblock LIST | set LIST | allow CIDR | unallow CIDR | all | none | reset | update" ;;
   esac
 }

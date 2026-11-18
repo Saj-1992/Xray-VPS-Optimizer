@@ -220,7 +220,34 @@ _status_servertools() {
   ui_kv "Backups" "$ST_BACKUP_DIR"
 }
 
+# show_status_json — machine-readable --status output for fleet tools.
+show_status_json() {
+  local host os kern cc qdisc ip4 ct_cnt ct_max prof tier users
+  host="$(hostname 2>/dev/null || printf 'unknown')"
+  os="$(os_pretty_name)"
+  kern="$(kernel_release)"
+  cc="$(sysctl_get net.ipv4.tcp_congestion_control)"
+  qdisc="$(sysctl_get net.core.default_qdisc)"
+  ip4="$(net_public_ip4)"
+  ct_cnt="$(sysctl_get net.netfilter.nf_conntrack_count)"
+  ct_max="$(sysctl_get net.netfilter.nf_conntrack_max)"
+  prof="$(config_get last_profile none)"
+  tier="$(config_get last_tier -)"
+  users="$(config_get expected_users 0)"
+  printf '{"version":"%s","host":"%s","os":"%s","kernel":"%s","vcpu":%s,"ram_mb":%s,"ip4":"%s","cc":"%s","qdisc":"%s","conntrack_count":"%s","conntrack_max":"%s","profile":"%s","tier":"%s","users":%s,"detected":"%s"}\n' \
+    "$(json_escape "$ST_VERSION")" "$(json_escape "$host")" "$(json_escape "$os")" \
+    "$(json_escape "$kern")" "$(cpu_cores)" "$(mem_total_mb)" \
+    "$(json_escape "$ip4")" "$(json_escape "$cc")" "$(json_escape "$qdisc")" \
+    "$(json_escape "$ct_cnt")" "$(json_escape "$ct_max")" \
+    "$(json_escape "$prof")" "$(json_escape "$tier")" "${users:-0}" \
+    "$(json_escape "$(detect_summary)")"
+}
+
 show_status() {
+  if ((ST_OPT_JSON)); then
+    show_status_json
+    return 0
+  fi
   ui_logo
   ui_title "System Status"
 

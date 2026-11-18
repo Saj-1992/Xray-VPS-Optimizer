@@ -32,9 +32,9 @@ profile_resolve_auto() {
   fi
 }
 
-# profile_wants_forwarding — vpn workloads route user traffic.
+# profile_wants_forwarding — vpn workloads and relay bridges route user traffic.
 profile_wants_forwarding() {
-  [[ $ST_PROFILE == vpn-node || $ST_PROFILE == wireguard || $ST_PROFILE == accounting || $ST_PROFILE == full ]]
+  [[ $ST_PROFILE == vpn-node || $ST_PROFILE == wireguard || $ST_PROFILE == bridge || $ST_PROFILE == accounting || $ST_PROFILE == full ]]
 }
 
 tier_set() {

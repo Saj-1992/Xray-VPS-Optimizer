@@ -2,7 +2,7 @@
 
 ابزار **بهینه‌سازی حرفه‌ای سرور لینوکس** با **مصرف زمان‌اجرای صفر (Zero-Footprint)** — طراحی‌شده برای زیرساخت‌های VPN پرترافیک: نودهای Xray/Reality (`marzban-node`، `pg-node`/Pasarguard، `marznode`)، پنل‌های Marzban/Pasarguard، وایرگارد، `x-ui` و Hiddify — و همچنین بهینه‌سازی عمومی هر سرور لینوکسی.
 
-> نسخهٔ فعلی: **v2.14.4** · تک‌فایل بدون وابستگی خارجی · اجرا با دسترسی `root` · [آخرین نسخه در Releases](https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest)  
+> نسخهٔ فعلی: **v2.16.0** · تک‌فایل بدون وابستگی خارجی · اجرا با دسترسی `root` · [آخرین نسخه در Releases](https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest)  
 > نسخهٔ ۱ در [`legacy/`](legacy/) فریز شده و دیگر به‌روزرسانی نمی‌شود.
 
 📖 **[راهنمای جامع صفر تا صد و تفسیر کامل پروژه ← docs/GUIDE.md](docs/GUIDE.md)**
@@ -120,12 +120,13 @@ st setup status     # مشاهدهٔ وضعیت نصب پنل‌ها و نوده
 ```text
 st                              باز کردن منوی تعاملی و داشبورد وضعیت
 st go                           تشخیص، بهینه‌سازی کامل و نمایش سلامت بدون هیچ سؤالی
-st --status                     گزارش کامل وضعیت سیستم، شبکه و کرنل
+st --status [--json]            گزارش کامل وضعیت سیستم، شبکه و کرنل (متنی یا JSON)
 st --auto                       بهینه‌سازی غیرتعاملی (پایه + پروفایل تشخیص‌داده‌شده)
-  --profile NAME                general | vpn-node | wireguard | panel | accounting | full
+  --profile NAME                general | vpn-node | wireguard | bridge | panel | accounting | full
   --tier S|M|L|XL               انتخاب دستی تیر ظرفیت
   --users N                     سایزدهی conntrack بر اساس تعداد کاربر همزمان
   --qdisc fq|fq_codel|cake      انتخاب صف شبکه همراه BBR (پیش‌فرض: fq_codel)
+  --anti-flood                  فعال‌سازی محافظت کرنلی در برابر SYN/Connection Flood
   --dns VALUE                   cloudflare | google | quad9 | opendns | shecan | electro | begzar | "ip1,ip2"
   --no-swap / --no-limits       حذف مراحل دلخواه در حالت --auto
   --no-extras / --no-perf / --no-priority

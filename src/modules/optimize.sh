@@ -305,12 +305,13 @@ quick_optimize() {
 # overrides; invalid values die with a clear message. Shared by auto+dry-run.
 _apply_cli_profile_tier() {
   if [[ -n $ST_AUTO_PROFILE ]]; then
+    [[ $ST_AUTO_PROFILE == iran-relay ]] && ST_AUTO_PROFILE='bridge'
     case "$ST_AUTO_PROFILE" in
-      general | vpn-node | wireguard | panel | accounting | full)
+      general | vpn-node | wireguard | bridge | panel | accounting | full)
         ST_PROFILE="$ST_AUTO_PROFILE"
         ST_PROFILE_SOURCE='cli'
         ;;
-      *) die "Invalid --profile '${ST_AUTO_PROFILE}' (general|vpn-node|wireguard|panel|accounting|full)." ;;
+      *) die "Invalid --profile '${ST_AUTO_PROFILE}' (general|vpn-node|wireguard|bridge|panel|accounting|full)." ;;
     esac
   else
     profile_resolve_auto
@@ -379,6 +380,7 @@ custom_optimize() {
   ui_menu_item 4 "panel" "Marzban/Pasarguard panel host"
   ui_menu_item 5 "full" "everything with best-practice defaults"
   ui_menu_item 6 "accounting" "VPN accounting server (many users, forwarding)"
+  ui_menu_item 7 "bridge" "Iran relay / tunnel bridge (liberal conntrack, rp_filter=0)"
   local choice
   read -rp "Select [Enter=suggested]: " choice || return 0
   case "${choice:-}" in
@@ -388,6 +390,7 @@ custom_optimize() {
     4) ST_PROFILE='panel' ;;
     5) ST_PROFILE='full' ;;
     6) ST_PROFILE='accounting' ;;
+    7) ST_PROFILE='bridge' ;;
     *) ST_PROFILE="$suggested" ;;
   esac
   ST_PROFILE_SOURCE='manual'

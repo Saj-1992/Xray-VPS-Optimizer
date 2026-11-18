@@ -12,29 +12,46 @@ readonly -a ST_PING_TARGETS=(
   'Global - Google (8.8.8.8)|8.8.8.8'
 )
 
+# _tcp_probe_ms HOST PORT — real TCP handshake time in ms (bash /dev/tcp or curl).
+_tcp_probe_ms() {
+  local host="$1" port="${2:-443}"
+  if has_cmd curl; then
+    local t
+    t="$(curl -o /dev/null -sS --max-time 2 -w '%{time_connect}' "https://${host}:${port}" 2>/dev/null)" || t=''
+    if [[ -n $t && $t != 0.000000 ]]; then
+      awk -v s="$t" 'BEGIN {printf "%.1f", s * 1000}'
+      return 0
+    fi
+  fi
+  return 1
+}
+
 tools_ping_matrix() {
-  ui_section "Ping matrix (Iran + global, 3 probes each)"
+  ui_section "Iran & global route quality (ICMP + Jitter + TCP/443)"
   if ! has_cmd ping; then
     printf 'ping is not available on this system.\n'
     return 0
   fi
-  printf 'Useful for judging how well this location serves users in Iran.\n\n'
-  local entry label ip out loss avg
+  printf 'Measures ICMP latency/jitter/loss and real TCP/443 handshake time.\n\n'
+  local entry label ip out loss avg mdev tcp_ms
   for entry in "${ST_PING_TARGETS[@]}"; do
     IFS='|' read -r label ip <<<"$entry"
-    out="$(ping -c 3 -W 1 "$ip" 2>/dev/null)" || out=''
+    out="$(ping -c 4 -W 1 "$ip" 2>/dev/null)" || out=''
     loss="$(grep -oE '[0-9]+(\.[0-9]+)?% packet loss' <<<"$out" | cut -d'%' -f1)" || loss=''
     avg="$(awk -F'/' '/rtt|round-trip/ {print $5; exit}' <<<"$out")" || avg=''
+    mdev="$(awk -F'/' '/rtt|round-trip/ {gsub(/ ms.*/, "", $7); print $7; exit}' <<<"$out")" || mdev=''
+    tcp_ms="$(_tcp_probe_ms "$ip" 443)" || tcp_ms='-'
     if [[ -n $avg ]]; then
-      printf '  %-38s loss %3s%%   avg %s ms\n' "$label" "${loss:-?}" "$avg"
+      printf '  %-36s loss %3s%%   avg %6s ms (jitter %s)   tcp443 %s ms\n' \
+        "$label" "${loss:-?}" "$avg" "${mdev:-?}" "$tcp_ms"
     else
-      printf '  %-38s %sunreachable%s\n' "$label" "$C_ERR" "$C_RESET"
+      printf '  %-36s %sunreachable%s   (tcp443 %s ms)\n' "$label" "$C_ERR" "$C_RESET" "$tcp_ms"
     fi
   done
 }
 
 tools_tcp_status() {
-  ui_section "TCP / conntrack live status"
+  ui_section "TCP / UDP / conntrack live status"
   ui_kv "Congestion" "$(sysctl_get net.ipv4.tcp_congestion_control)"
   ui_kv "Qdisc" "$(sysctl_get net.core.default_qdisc)"
   ui_kv "Available cc" "$(sysctl_get net.ipv4.tcp_available_congestion_control)"
@@ -48,6 +65,19 @@ tools_tcp_status() {
     ui_kv "Conntrack" "${count} / ${max} ($((count * 100 / max))% used)"
   else
     ui_kv "Conntrack" "module not loaded"
+  fi
+
+  local iface qstat
+  iface="$(net_default_iface)" || iface=''
+  if [[ -n $iface ]] && has_cmd tc; then
+    qstat="$(tc -s qdisc show dev "$iface" 2>/dev/null | grep -oE 'dropped [0-9]+, overlimits [0-9]+, requeues [0-9]+' | head -n1)" || qstat=''
+    [[ -n $qstat ]] && ui_kv "Qdisc (${iface})" "$qstat"
+  fi
+
+  if [[ -r /proc/net/snmp ]]; then
+    local udp_err
+    udp_err="$(awk '/^Udp:/ {if (!h) {for (i=1;i<=NF;i++) idx[$i]=i; h=1; next} printf "RcvbufErrors=%s SndbufErrors=%s", $idx["RcvbufErrors"], $idx["SndbufErrors"]; exit}' /proc/net/snmp 2>/dev/null)" || udp_err=''
+    [[ -n $udp_err ]] && ui_kv "UDP buffer errs" "$udp_err"
   fi
 }
 
@@ -633,27 +663,231 @@ tools_report() {
   log_info "Support report written to ${out}."
 }
 
+# --- Peer iperf3, Reality SNI, NIC ring, XanMod check, Safe Disk Cleaner ------
+
+# tools_iperf3 — guided single-shot iperf3 test between two nodes (Iran <-> foreign).
+tools_iperf3() {
+  ui_section "Peer bandwidth test (iperf3, Iran <-> foreign)"
+  if ! has_cmd iperf3; then
+    ui_confirm "iperf3 is not installed. Install it now?" || return 0
+    pkg_install iperf3 || {
+      log_error "Could not install iperf3."
+      return 1
+    }
+  fi
+  local mode port peer rev_flag='' proto_flag=''
+  printf '  1) Server mode  (listen once on this host, auto-exits after test)\n'
+  printf '  2) Client mode  (connect to a peer running iperf3 server)\n'
+  read -rp "Choose [1/2, Enter=cancel]: " mode || return 0
+  case "$mode" in
+    1)
+      read -rp "Listen port [5201]: " port || return 0
+      port="${port:-5201}"
+      [[ $port =~ ^[0-9]+$ ]] || {
+        log_error "Invalid port."
+        return 1
+      }
+      printf 'Listening on %s (one-shot: exits as soon as client finishes)...\n' "$port"
+      iperf3 -s -1 -p "$port" || true
+      ;;
+    2)
+      read -rp "Peer IP / hostname: " peer || return 0
+      [[ -n $peer ]] || return 0
+      read -rp "Peer port [5201]: " port || return 0
+      port="${port:-5201}"
+      [[ $port =~ ^[0-9]+$ ]] || {
+        log_error "Invalid port."
+        return 1
+      }
+      ui_confirm "Test reverse download direction (-R, peer -> this host)?" && rev_flag='-R'
+      ui_confirm "Use UDP instead of TCP?" && proto_flag='-u -b 0'
+      # shellcheck disable=SC2086
+      iperf3 -c "$peer" -p "$port" -P 4 -t 10 $rev_flag $proto_flag || true
+      ;;
+    *) return 0 ;;
+  esac
+}
+
+# tools_sni_check — Reality SNI validator (TLS 1.3, ALPN h2, X25519, latency).
+tools_sni_check() {
+  ui_section "Reality SNI validator"
+  has_cmd openssl || {
+    log_error "openssl is required."
+    return 1
+  }
+  local host port=443 out tls alpn kex verify_rc tcp_ms
+  read -rp "Target SNI domain (e.g. www.google.com, yahoo.com): " host || return 0
+  host="${host// /}"
+  [[ -n $host ]] || return 0
+
+  out="$(printf '' | timeout 5 openssl s_client -connect "${host}:${port}" -servername "$host" -tls1_3 -alpn h2 2>&1)" || true
+  tls="$(awk -F': *' '/Protocol[[:space:]]*:/ {print $2; exit}' <<<"$out")"
+  alpn="$(awk -F': *' '/ALPN protocol:/ {print $2; exit}' <<<"$out")"
+  kex="$(awk -F': *' '/Server Temp Key:/ {print $2; exit}' <<<"$out")"
+  verify_rc="$(awk -F': *' '/Verify return code:/ {print $2; exit}' <<<"$out")"
+  tcp_ms="$(_tcp_probe_ms "$host" "$port")" || tcp_ms='-'
+
+  ui_kv "Target" "${host}:${port}"
+  ui_kv "TCP+TLS ping" "${tcp_ms} ms"
+  ui_kv "Protocol" "${tls:-none}"
+  ui_kv "ALPN" "${alpn:-none}"
+  ui_kv "Key exchange" "${kex:-unknown}"
+  ui_kv "Cert verify" "${verify_rc:-unknown}"
+
+  if [[ $tls == *TLSv1.3* && $alpn == *h2* && $kex == *X25519* ]]; then
+    printf '\n%sGOOD for Reality:%s supports TLS 1.3 + h2 + X25519.\n' "$C_OK" "$C_RESET"
+  else
+    printf '\n%sNOT ideal for Reality:%s missing TLSv1.3, ALPN h2, or X25519.\n' "$C_WARN" "$C_RESET"
+  fi
+}
+
+# tools_nic_ring — inspect and optionally raise NIC RX/TX ring buffers.
+tools_nic_ring() {
+  ui_section "NIC ring buffer (ethtool -G)"
+  local iface
+  iface="$(net_default_iface)" || iface=''
+  [[ -n $iface ]] || {
+    log_error "No default interface found."
+    return 1
+  }
+  if ! has_cmd ethtool; then
+    ui_confirm "ethtool is not installed. Install it now?" || return 0
+    pkg_install ethtool || return 1
+  fi
+  local info
+  info="$(ethtool -g "$iface" 2>/dev/null)" || {
+    printf 'Driver for %s does not expose ring parameters.\n' "$iface"
+    return 0
+  }
+  printf '%s\n\n' "$info"
+  printf '%sNote:%s changing ring sizes may briefly reset the NIC link on some drivers.\n' "$C_WARN" "$C_RESET"
+  ui_confirm "Raise RX/TX ring buffers toward driver maximum (capped at 4096)?" || return 0
+
+  local max_rx max_tx target_rx target_tx
+  max_rx="$(awk '/Pre-set maximums:/{f=1;next} /Current hardware settings:/{f=0} f && /^RX:/ {print $2; exit}' <<<"$info")"
+  max_tx="$(awk '/Pre-set maximums:/{f=1;next} /Current hardware settings:/{f=0} f && /^TX:/ {print $2; exit}' <<<"$info")"
+  [[ $max_rx =~ ^[0-9]+$ ]] || max_rx=0
+  [[ $max_tx =~ ^[0-9]+$ ]] || max_tx=0
+  target_rx=$max_rx
+  target_tx=$max_tx
+  ((target_rx > 4096)) && target_rx=4096
+  ((target_tx > 4096)) && target_tx=4096
+
+  local -a args=()
+  ((target_rx > 0)) && args+=(rx "$target_rx")
+  ((target_tx > 0)) && args+=(tx "$target_tx")
+  ((${#args[@]} > 0)) || {
+    printf 'No adjustable ring parameters.\n'
+    return 0
+  }
+  if ethtool -G "$iface" "${args[@]}" 2>>"$ST_LOG_FILE"; then
+    printf '%sUpdated %s ring buffers (%s).%s\n' "$C_OK" "$iface" "${args[*]}" "$C_RESET"
+    log_info "ethtool -G ${iface} ${args[*]}"
+  else
+    log_warn "ethtool -G failed on ${iface} — see log."
+  fi
+}
+
+# tools_xanmod_check — pre-flight compatibility check for XanMod / BBRv3.
+tools_xanmod_check() {
+  ui_section "XanMod / BBRv3 compatibility check"
+  local virt arch boot_mb flags lvl='x86-64-v1' cc mod_ver
+  virt="$(detect_virt)"
+  arch="$(uname -m)"
+  boot_mb="$(df -Pm /boot 2>/dev/null | awk 'NR==2 {print $4}')" || boot_mb=0
+  cc="$(sysctl_get net.ipv4.tcp_congestion_control)"
+  mod_ver="$(modinfo -F version tcp_bbr 2>/dev/null || printf 'built-in/unknown')"
+  flags="$(awk -F': ' '/^flags/ {print $2; exit}' /proc/cpuinfo 2>/dev/null || true)"
+  if [[ $flags == *avx2* && $flags == *bmi2* && $flags == *fma* ]]; then
+    lvl='x86-64-v3'
+  elif [[ $flags == *sse4_2* && $flags == *popcnt* ]]; then
+    lvl='x86-64-v2'
+  fi
+
+  ui_kv "Architecture" "${arch} (${lvl})"
+  ui_kv "Virtualization" "$virt"
+  ui_kv "/boot free" "${boot_mb:-?} MB"
+  ui_kv "Live CC / BBR" "${cc} (${mod_ver})"
+
+  local ok=1
+  if [[ $arch != x86_64 ]]; then
+    printf '%sBLOCKER:%s XanMod requires x86_64 (found %s).\n' "$C_ERR" "$C_RESET" "$arch"
+    ok=0
+  fi
+  case "$virt" in
+    lxc | lxc-libvirt | openvz | docker | podman)
+      printf '%sBLOCKER:%s container (%s) shares host kernel — cannot boot a custom kernel.\n' "$C_ERR" "$C_RESET" "$virt"
+      ok=0
+      ;;
+  esac
+  if [[ $boot_mb =~ ^[0-9]+$ ]] && ((boot_mb < 250)); then
+    printf '%sWARN:%s /boot has only %s MB free (recommend >= 250 MB).\n' "$C_WARN" "$C_RESET" "$boot_mb"
+    ok=0
+  fi
+  ((ok)) && printf '\n%sHost is compatible with XanMod (%s).%s\n' "$C_OK" "$lvl" "$C_RESET"
+  return 0
+}
+
+# tools_disk_cleaner — safely inspect and reclaim disk space (logs, apt, docker).
+tools_disk_cleaner() {
+  ui_section "Safe disk cleaner"
+  local docker_mb=0 apt_mb=0
+  if [[ -d /var/lib/docker/containers ]]; then
+    docker_mb="$(du -sm /var/lib/docker/containers/*/*-json.log 2>/dev/null | awk '{s+=$1} END {print s+0}')"
+  fi
+  if [[ -d /var/cache/apt/archives ]]; then
+    apt_mb="$(du -sm /var/cache/apt/archives 2>/dev/null | awk '{print $1+0}')"
+  fi
+  ui_kv "Disk / usage" "$(df -h / | awk 'NR==2 {print $3 " / " $2 " (" $5 ")"}')"
+  ui_kv "Docker JSON logs" "${docker_mb} MB"
+  ui_kv "APT cache" "${apt_mb} MB"
+  has_cmd journalctl && ui_kv "Journald usage" "$(journalctl --disk-usage 2>/dev/null | awk '{print $NF}')"
+
+  if ((apt_mb > 10)) && has_cmd apt-get && ui_confirm "Clean APT cache (${apt_mb} MB)?"; then
+    apt-get clean >/dev/null 2>>"$ST_LOG_FILE" || true
+    printf 'APT cache cleaned.\n'
+  fi
+  if has_cmd journalctl && ui_confirm "Vacuum systemd journal logs older than 7 days / >100M?"; then
+    journalctl --vacuum-size=100M --vacuum-time=7d >/dev/null 2>>"$ST_LOG_FILE" || true
+    printf 'Journald vacuumed.\n'
+  fi
+  if ((docker_mb > 50)) && ui_confirm "Truncate oversized Docker container logs (${docker_mb} MB total)?"; then
+    find /var/lib/docker/containers -name '*-json.log' -size +50M -exec truncate -s 0 {} + 2>/dev/null || true
+    printf 'Oversized Docker logs truncated.\n'
+  fi
+  if has_cmd docker && ui_confirm "Prune unused/dangling Docker images (docker image prune -f)?"; then
+    docker image prune -f >/dev/null 2>>"$ST_LOG_FILE" || true
+    printf 'Dangling Docker images pruned.\n'
+  fi
+  return 0
+}
+
 tools_menu() {
   local choice
   while true; do
     ui_logo
     ui_title "Network & VPN Tools"
     ui_menu_group "Diagnose"
-    ui_menu_item 1 "Ping matrix" "latency to Iran + global"
+    ui_menu_item 1 "Ping & route quality" "Iran + global ICMP, jitter, TCP/443"
     ui_menu_item 2 "DNS latency" "ping every DNS provider"
-    ui_menu_item 3 "TCP / conntrack" "BBR · forwarding · table usage"
+    ui_menu_item 3 "TCP / UDP / conntrack" "BBR · qdisc drops · UDP errs · table"
     ui_menu_item 4 "Listening ports" "ss snapshot"
+    ui_menu_item v "Reality SNI check" "validate TLS 1.3 · ALPN h2 · X25519"
     ui_menu_group "Measure"
     ui_menu_item 9 "Bandwidth test" "speedtest or HTTP download"
+    ui_menu_item x "Peer iperf3 test" "Iran <-> foreign server/client test"
     ui_menu_item b "Quick benchmark" "CPU and disk"
     ui_menu_item w "Live view" "traffic · sockets · conntrack"
     ui_menu_group "Network"
     ui_menu_item 5 "Smart MTU / MSS" "measure the path, fix 'connects but no sites'"
     ui_menu_item p "Proxy priority" "CPU + OOM priority for Xray · Docker nodes"
     ui_menu_item n "Conntrack NOTRACK" "exempt proxy ports (Xray/Reality)"
+    ui_menu_item r "NIC ring buffers" "inspect / tune ethtool -G"
     ui_menu_item i "IPv6 control" "disable/enable the IPv6 stack"
     ui_menu_item 6 "Docker + UFW audit" "check the firewall bypass"
     ui_menu_group "System"
+    ui_menu_item k "XanMod / BBRv3 check" "verify CPU, /boot, virtualization"
+    ui_menu_item c "Safe disk cleaner" "docker logs · journald · apt cache"
     ui_menu_item 7 "Support report" "full plain-text dump"
     ui_menu_item d "Panels, nodes & Docker" "install Pasarguard node / x-ui · backup · limits"
     ui_menu_item s "Settings" "install 'st' · update · paths"
@@ -674,6 +908,26 @@ tools_menu() {
         ;;
       4)
         tools_listening_ports
+        ui_pause
+        ;;
+      v | V)
+        tools_sni_check || true
+        ui_pause
+        ;;
+      x | X)
+        tools_iperf3 || true
+        ui_pause
+        ;;
+      r | R)
+        tools_nic_ring || true
+        ui_pause
+        ;;
+      k | K)
+        tools_xanmod_check || true
+        ui_pause
+        ;;
+      c | C)
+        tools_disk_cleaner || true
         ui_pause
         ;;
       5)

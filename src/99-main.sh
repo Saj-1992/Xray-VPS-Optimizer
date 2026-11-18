@@ -15,7 +15,7 @@ Actions (no action starts the interactive menu):
   --status              Print the full system status report and exit
   go                    One key: detect, optimize, show health — no questions
                         (accepts --users / --qdisc / --dns / --profile)
-  isp SUB [LIST]        Iran ISP blocker: status | live | check IP | scope all|443,8443 | block mci,mtn | unblock mtn | set LIST | all | none | update
+  isp SUB [LIST]        Iran ISP blocker: status | live | check IP | scope all|443,8443 | block mci,mtn | unblock mtn | allow CIDR | unallow CIDR | set LIST | all | none | update
                         live = connections per ISP now (add --watch, --interval N, --port 443,8443)
   setup APP             Install a panel/node with its official installer:
                         pg-node | marzban-node | xui | 3xui | status (--sha256 HEX pins the installer)
@@ -36,12 +36,13 @@ Actions (no action starts the interactive menu):
                         --allow-unverified installs even when it cannot be checked)
 
 Options for --auto and --dry-run:
-  --profile NAME        general | vpn-node | wireguard | panel | accounting | full
+  --profile NAME        general | vpn-node | wireguard | bridge | panel | accounting | full
   --tier T              Capacity tier: S | M | L | XL (default: by RAM)
   --users N             Expected concurrent users — sizes conntrack from the
                         real user count instead of RAM (with a RAM warning)
   --qdisc NAME          Queue discipline paired with BBR: fq | fq_codel | cake
                         (default fq_codel; cake = best fairness for many users)
+  --anti-flood          Enable SYN-flood / connection-flood kernel hardening
   --dns VALUE           Provider (cloudflare|google|quad9|opendns|shecan|
                         electro|begzar) or custom "primary,secondary"
   --no-swap             Skip the swap step
@@ -182,6 +183,10 @@ main() {
         ;;
       --no-perf)
         ST_AUTO_PERF=0
+        tuning_opts='yes'
+        ;;
+      --anti-flood)
+        ST_ANTI_FLOOD=1
         tuning_opts='yes'
         ;;
       --allow-unverified) ST_ALLOW_UNVERIFIED=1 ;;

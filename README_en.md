@@ -5,7 +5,7 @@ for high-traffic VPN infrastructure: Xray/Reality nodes (`marzban-node`,
 `pg-node`/Pasarguard, `marznode`), Marzban/Pasarguard panels, WireGuard, `x-ui`,
 and Hiddify — as well as general-purpose tuning of any Linux server.
 
-> Current version: **v2.14.4** · single file, no runtime dependencies, run as `root` · [Latest release](https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest)  
+> Current version: **v2.16.0** · single file, no runtime dependencies, run as `root` · [Latest release](https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest)  
 > Version 1 is frozen under [`legacy/`](legacy/) and no longer updated.
 
 📖 **[Full 0-to-100 guide & project overview (Persian) ← docs/GUIDE.md](docs/GUIDE.md)**
@@ -123,12 +123,13 @@ st setup status
 ```text
 st                              Open the interactive menu and live dashboard
 st go                           Detect, optimize, and show health — no questions
-st --status                     Print full system status and exit
+st --status [--json]            Print full system status (text or JSON) and exit
 st --auto                       Non-interactive optimize (base + detected profile)
-  --profile NAME                general | vpn-node | wireguard | panel | accounting | full
+  --profile NAME                general | vpn-node | wireguard | bridge | panel | accounting | full
   --tier S|M|L|XL               Manual capacity tier
   --users N                     Size conntrack from expected concurrent users
   --qdisc fq|fq_codel|cake      Queue discipline paired with BBR (default: fq_codel)
+  --anti-flood                  Enable SYN/connection-flood kernel hardening
   --dns VALUE                   cloudflare | google | quad9 | opendns | shecan | electro | begzar | "ip1,ip2"
   --no-swap / --no-limits       Skip optional steps in --auto mode
   --no-extras / --no-perf / --no-priority

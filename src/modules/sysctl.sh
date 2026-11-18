@@ -13,6 +13,7 @@ readonly ST_MODPROBE_FILE='/etc/modprobe.d/server-tools.conf'
 ST_CC='cubic'
 ST_QDISC='fq_codel'
 ST_AUTO_QDISC='' # --qdisc: fq | fq_codel | cake (empty = config / auto)
+ST_ANTI_FLOOD=0  # --anti-flood: 1 enables SYN/connection flood hardening
 
 # sysctl_detect_bbr — pick congestion control and queueing discipline.
 # fq_codel is ALWAYS the first choice, with BBR or without; fq and cake are
@@ -234,8 +235,12 @@ EOF
     # kernel keeps an assured stream for 120s by default. Proxy traffic keeps
     # flowing (so active flows are refreshed), while WireGuard benefits from
     # longer-lived NAT mappings, hence the profile split.
-    local udp_stream=60
+    local udp_stream=60 rp_filter=2
     [[ $ST_PROFILE == wireguard ]] && udp_stream=180
+    if [[ $ST_PROFILE == bridge ]]; then
+      udp_stream=120
+      rp_filter=0
+    fi
 
     cat <<EOF
 
@@ -250,8 +255,8 @@ net.netfilter.nf_conntrack_tcp_timeout_close_wait = 30
 net.netfilter.nf_conntrack_udp_timeout = 30
 net.netfilter.nf_conntrack_udp_timeout_stream = ${udp_stream}
 net.netfilter.nf_conntrack_generic_timeout = 300
-net.ipv4.conf.all.rp_filter = 2
-net.ipv4.conf.default.rp_filter = 2
+net.ipv4.conf.all.rp_filter = ${rp_filter}
+net.ipv4.conf.default.rp_filter = ${rp_filter}
 net.ipv4.conf.all.accept_redirects = 0
 net.ipv4.conf.default.accept_redirects = 0
 net.ipv4.conf.all.send_redirects = 0
@@ -259,6 +264,14 @@ net.ipv4.conf.default.send_redirects = 0
 net.ipv4.conf.all.accept_source_route = 0
 net.ipv4.conf.default.accept_source_route = 0
 EOF
+
+    if [[ $ST_PROFILE == bridge ]]; then
+      cat <<EOF
+# Asymmetric tunnel / relay paths can see out-of-window TCP segments; liberal
+# conntrack prevents silent drops on Iran <-> foreign bridge hops.
+net.netfilter.nf_conntrack_tcp_be_liberal = 1
+EOF
+    fi
 
     # Enabling IPv6 forwarding makes the kernel ignore router advertisements,
     # which silently kills the IPv6 default route on RA/SLAAC providers after
@@ -281,6 +294,17 @@ EOF
       [[ $iface_ra =~ ^[1-9] ]] &&
         printf -- '-net.ipv6.conf.%s.accept_ra = 2\n' "$iface"
     fi
+  fi
+
+  if ((ST_ANTI_FLOOD)) || [[ $(config_get anti_flood 0) == 1 ]]; then
+    cat <<EOF
+
+# --- Anti-flood / SYN-flood kernel shield
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_synack_retries = 2
+net.ipv4.tcp_syn_retries = 2
+net.ipv4.tcp_abort_on_overflow = 0
+EOF
   fi
 
   # This helper's stdout is captured via `rendered="$(_sysctl_render)"`. Under

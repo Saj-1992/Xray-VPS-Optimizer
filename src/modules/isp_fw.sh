@@ -362,10 +362,20 @@ isp_apply() {
     log_info "ISP blocker: nothing blocked, rules removed."
     return 0
   fi
-  has_cmd iptables || {
-    log_error "iptables is not available."
-    return 1
-  }
+  if ! has_cmd iptables; then
+    if has_cmd nft; then
+      log_warn "Host uses pure nftables without iptables — offering iptables (iptables-nft compatibility)."
+    fi
+    if ((ST_OPT_BATCH == 0)) && ui_confirm_yes "iptables is not installed. Install iptables now?"; then
+      pkg_install iptables || {
+        log_error "iptables installation failed — see the log."
+        return 1
+      }
+    else
+      log_error "iptables is not available (install iptables / iptables-nft)."
+      return 1
+    fi
+  fi
   if ! has_cmd ipset; then
     # Asked for interactively; a CLI call (st isp ...) is already the consent.
     if ((ST_OPT_BATCH == 0)); then

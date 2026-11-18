@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.16.0] — 2026-11-18
+
+Network engineering & daily VPN ops toolkit expansion.
+
+### Added
+
+- **`bridge` / `iran-relay` workload profile** (`--profile bridge` or `--profile iran-relay`): enables IPv4/IPv6 forwarding with `rp_filter=0` and `nf_conntrack_tcp_be_liberal=1` for asymmetric Iran ↔ foreign relay/tunnel paths.
+- **Anti-flood kernel hardening** (`--anti-flood`): enables `tcp_syncookies=1`, tightens `tcp_synack_retries=2` and `tcp_syn_retries=2`.
+- **Route quality & Reality SNI diagnostics** (`tools_ping_matrix`, `tools_sni_check`, `tools_tcp_status`): measures ICMP jitter + TCP/443 handshake latency, validates Reality SNI domains (TLS 1.3, ALPN `h2`, `X25519`), and displays live `tc -s qdisc` drop/overlimit stats plus UDP buffer error counters.
+- **Guided `iperf3` peer bandwidth test** (`tools_iperf3`): single-shot server/client bandwidth testing between Iran relay and foreign exit nodes.
+- **NIC Ring Buffer tuner (`tools_nic_ring`)**, **XanMod / BBRv3 pre-flight compatibility check (`tools_xanmod_check`)**, and **Safe Disk Cleaner (`tools_disk_cleaner`)** in the Tools menu.
+- **Safe SSH port switch (`security_ssh_port`)** and **Docker + UFW `DOCKER-USER` guard (`security_docker_ufw`)** in the Security menu.
+- **`st isp allow CIDR` / `st isp unallow CIDR`**: persistent whitelist management from the CLI, plus `nftables` awareness when `iptables` is missing.
+- **`st --status --json`**: machine-readable JSON output for `--status`.
+
 ## [2.15.0] — 2026-11-18
 
 Hardening and housekeeping from a project review: verification where it was optional, locking, rollback that behaves, tests that cover the pure logic.
