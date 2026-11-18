@@ -5,7 +5,7 @@ built for high-traffic VPN infrastructure: Xray/Reality nodes (`marzban-node`,
 `pg-node`/Pasarguard, `marznode`), Marzban/Pasarguard panels, WireGuard, x-ui,
 and Hiddify — and for general-purpose tuning of any Linux server.
 
-> Stable release: **v2.9.0** · one file, no dependencies, run as root.
+> Stable release: [latest published release](https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest) · one file, no dependencies, run as root.
 > Version 1 is frozen under [`legacy/`](legacy/) and no longer updated.
 
 📖 **[Full 0-to-100 guide (Persian) ← docs/GUIDE.md](docs/GUIDE.md)**
@@ -15,13 +15,13 @@ and Hiddify — and for general-purpose tuning of any Linux server.
 Run directly:
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh)
+bash <(curl -fsSL4 https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest/download/server-tools.sh)
 ```
 
 Install as the `st` command (recommended):
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh) --install
+bash <(curl -fsSL4 https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest/download/server-tools.sh) --install
 ```
 
 From then on just run `st`; update with `st --update`.

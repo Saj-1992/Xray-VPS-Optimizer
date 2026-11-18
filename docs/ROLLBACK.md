@@ -70,3 +70,7 @@ qdisc of the default interface. Hosts tuned by an older version have no such
 snapshot; their files are restored and loaded kernel values finish returning at
 the next reboot. CPU/NIC data-path tweaks (RPS, governor, THP) also settle back at
 the next reboot.
+
+## Running it twice
+
+`st --rollback` undoes the latest run that has not been undone yet. A rolled-back run is marked `reverted` in `manifest.tsv`, so a second `st --rollback` goes on to the run before it instead of repeating the first. When the undone run created the sysctl file, the live kernel values are restored from the snapshot taken before the first tuning (if the host has one).

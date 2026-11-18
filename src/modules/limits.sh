@@ -97,3 +97,35 @@ EOF
   log_error "Docker restart failed — check the log; daemon.json is tracked for rollback."
   return 1
 }
+
+# limits_live_verify — the file limit a RUNNING proxy really has. Settings on
+# disk say nothing about a process that was started before they existed, or
+# whose container never inherited them; `Max open files` in /proc/PID/limits is
+# the truth. 0 ok / 2 nothing to check / 3 a proxy runs with a low limit.
+ST_LIMITS_LOW=()
+limits_live_verify() {
+  [[ -f $ST_LIMITS_FILE ]] || return 2
+  priority_detect
+  ST_LIMITS_LOW=()
+  local svc entry engine name pid soft have=0
+  while IFS= read -r pid; do
+    [[ -n $pid ]] || continue
+    soft="$(awk '/^Max open files/ {print $4; exit}' "/proc/${pid}/limits" 2>/dev/null)" || soft=''
+    [[ -n $soft ]] || continue
+    have=1
+    if [[ $soft != unlimited ]] && ((soft < 65536)); then
+      ST_LIMITS_LOW+=("${pid}=${soft}")
+    fi
+  done < <(
+    for svc in "${ST_PRIO_SVC_TARGETS[@]}"; do
+      _prio_service_pids "$svc"
+    done
+    for entry in "${ST_PRIO_CTR_TARGETS[@]}"; do
+      IFS=$'\t' read -r engine name <<<"$entry"
+      _prio_container_pids "$engine" "$name"
+    done
+  )
+  ((have)) || return 2
+  ((${#ST_LIMITS_LOW[@]} == 0)) || return 3
+  return 0
+}

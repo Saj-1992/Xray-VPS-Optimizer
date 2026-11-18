@@ -5,3 +5,4 @@ Makefile text eol=lf
 VERSION text eol=lf
 *.ipv4 text eol=lf
 *.ipv6 text eol=lf
+data/isp/SHA256SUMS text eol=lf

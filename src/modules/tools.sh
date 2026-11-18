@@ -82,13 +82,26 @@ _st_ookla_arch() {
   esac
 }
 
+# _st_ookla_sha256 ARCH — the SHA-256 of ookla-speedtest-${ST_OOKLA_VER}-linux-ARCH.tgz,
+# pinned here so the archive is checked before anything from it is run. Bump
+# these together with ST_OOKLA_VER.
+_st_ookla_sha256() {
+  case "$1" in
+    x86_64) printf '5690596c54ff9bed63fa3732f818a05dbc2db19ad36ed68f21ca5f64d5cfeeb7' ;;
+    aarch64) printf '3953d231da3783e2bf8904b6dd72767c5c6e533e163d3742fd0437affa431bd3' ;;
+    armhf) printf 'e45fcdebbd8a185553535533dd032d6b10bc8c64eee4139b1147b9c09835d08d' ;;
+    i386) printf '9ff7e18dbae7ee0e03c66108445a2fb6ceea6c86f66482e1392f55881b772fe8' ;;
+    *) return 1 ;;
+  esac
+}
+
 # _st_fetch_ookla — download + extract the official Ookla CLI into a fresh temp
 # dir; echo the dir on success (the caller runs and removes it). Empty output /
 # non-zero on any failure, so the caller can fall back to the HTTP test.
 _st_fetch_ookla() {
   local arch dir url
   arch="$(_st_ookla_arch)" || return 1
-  has_cmd tar || return 1
+  has_cmd tar && has_cmd sha256sum || return 1
   mkdir -p "$ST_LIB_DIR"
   dir="$(mktemp -d "${ST_LIB_DIR}/ookla.XXXXXX" 2>/dev/null)" || return 1
   url="https://install.speedtest.net/app/cli/ookla-speedtest-${ST_OOKLA_VER}-linux-${arch}.tgz"
@@ -103,6 +116,12 @@ _st_fetch_ookla() {
       return 1
     }
   else
+    rm -rf "$dir"
+    return 1
+  fi
+  # Never unpack or run an archive that is not the one we pinned.
+  if [[ "$(sha256sum "${dir}/cli.tgz" | awk '{print $1}')" != "$(_st_ookla_sha256 "$arch")" ]]; then
+    log_warn "The downloaded Ookla client does not match its pinned SHA-256 — not used."
     rm -rf "$dir"
     return 1
   fi

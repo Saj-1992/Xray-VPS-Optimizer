@@ -5,7 +5,7 @@
 `marznode`)، پنل‌های Marzban/Pasarguard، وایرگارد، x-ui و Hiddify — و همچنین
 بهینه‌سازی عمومی هر سرور لینوکسی.
 
-> نسخهٔ پایدار: **v2.9.0** · یک فایل، بدون وابستگی، اجرا به‌عنوان root.
+> نسخهٔ پایدار: [آخرین نسخه‌ی منتشرشده](https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest) · یک فایل، بدون وابستگی، اجرا به‌عنوان root.
 > نسخهٔ ۱ در [`legacy/`](legacy/) فریز شده و دیگر آپدیت نمی‌گیرد.
 
 📖 **[راهنمای کامل صفر تا صد ← docs/GUIDE.md](docs/GUIDE.md)**
@@ -30,13 +30,13 @@ Xray و نودهای داکر · صف پیش‌فرض **fq_codel** (انتخاب
 اجرای مستقیم:
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh)
+bash <(curl -fsSL4 https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest/download/server-tools.sh)
 ```
 
 نصب به‌عنوان دستور `st` (پیشنهادی):
 
 ```bash
-bash <(curl -fsSL4 https://raw.githubusercontent.com/Saj-1992/Xray-VPS-Optimizer/main/dist/server-tools.sh) --install
+bash <(curl -fsSL4 https://github.com/Saj-1992/Xray-VPS-Optimizer/releases/latest/download/server-tools.sh) --install
 ```
 
 از این پس فقط `st` را اجرا کنید؛ آپدیت هم با `st --update`.

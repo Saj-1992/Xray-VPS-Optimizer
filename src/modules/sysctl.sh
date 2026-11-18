@@ -351,9 +351,28 @@ _sysctl_values_match() {
 # a different expectation than the one on disk.
 ST_SYSCTL_DRIFT=()
 
+# _sysctl_in_container — LXC / OpenVZ / Docker-like guests share the host's
+# kernel, and many sysctl keys are read-only there.
+_sysctl_in_container() {
+  case "$(detect_virt)" in
+    lxc | lxc-libvirt | openvz | docker | podman | systemd-nspawn | rkt | wsl | proot) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# _sysctl_key_locked KEY — the key exists but this guest may not change it. Such
+# a key can only ever "drift" for reasons we cannot fix, so it is not counted.
+_sysctl_key_locked() {
+  local path="/proc/sys/${1//.//}"
+  [[ -e $path && ! -w $path ]]
+}
+
 sysctl_verify() {
   ST_SYSCTL_DRIFT=()
-  local rendered="${1:-}" line key expected actual
+  local rendered="${1:-}" line key expected actual in_container=0
+  if _sysctl_in_container; then
+    in_container=1
+  fi
   if [[ -z $rendered ]]; then
     # Standalone callers (Doctor, health, menu) have no profile/tier in memory,
     # so re-rendering would compare against defaults and report false drift on a
@@ -369,6 +388,9 @@ sysctl_verify() {
     key="${line%%=*}"
     key="${key//[[:space:]]/}"
     key="${key#-}" # a leading "-" only tells systemd to ignore failures
+    if ((in_container)) && _sysctl_key_locked "$key"; then
+      continue
+    fi
     actual="$(sysctl_get "$key")"
     _sysctl_values_match "$key" "$actual" "$expected" ||
       ST_SYSCTL_DRIFT+=("${key}|${actual}|${expected}")

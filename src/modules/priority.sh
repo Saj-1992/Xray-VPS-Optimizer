@@ -233,6 +233,10 @@ priority_step() {
 # priority_boot — `st boost`: what the boot unit runs. Containers may still be
 # starting, so it waits (ST_BOOST_WAIT seconds at most) for the first one.
 priority_boot() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked priority_boot
+    return
+  fi
   local waited=0 limit="${ST_BOOST_WAIT:-0}"
   while ((waited < limit)); do
     priority_detect

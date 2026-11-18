@@ -53,6 +53,10 @@ backup_prune() {
 # rollback_original — restore every file to the state it had the first time
 # ServerTools touched it, across all runs, and remove everything it created.
 rollback_original() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked rollback_original
+    return
+  fi
   if [[ ! -d $ST_ORIGINAL_DIR ]]; then
     log_warn "No pristine backups recorded — nothing to restore."
     return 0
@@ -110,8 +114,12 @@ rollback_original() {
 # newest change first. Files "created" by that run are removed; "modified"
 # files are restored from the run backup.
 rollback_latest() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked rollback_latest
+    return
+  fi
   local run
-  run="$(manifest_latest_run)"
+  run="$(manifest_latest_run "$ST_MANIFEST_FILE")"
   if [[ -z $run ]]; then
     log_warn "No recorded changes — nothing to roll back."
     return 0
@@ -122,7 +130,7 @@ rollback_latest() {
   runtime_revert_prepass "$run"
 
   local src="${ST_BACKUP_DIR}/runs/${run}"
-  local action target restored=0 removed=0 missing=0 sysctl_touched=0 units_touched=0
+  local action target restored=0 removed=0 missing=0 sysctl_touched=0 units_touched=0 sysctl_file_removed=0
   while IFS=$'\t' read -r action target; do
     case "$action" in
       unit)
@@ -156,6 +164,7 @@ rollback_latest() {
         rm -f "$target"
         removed=$((removed + 1))
         [[ $target == /etc/sysctl.d/* ]] && sysctl_touched=1
+        [[ $target == "$ST_SYSCTL_FILE" ]] && sysctl_file_removed=1
         ;;
     esac
   done < <(awk -F'\t' -v run="$run" 'NR > 1 && $2 == run {print $3 "\t" $4}' "$ST_MANIFEST_FILE" | tac)
@@ -169,12 +178,20 @@ rollback_latest() {
       log_warn "sysctl reload after rollback reported errors (see log)."
   fi
 
+  # The run that CREATED our sysctl file is being undone: nothing re-applies the
+  # old values, so put the live kernel values back from the snapshot taken
+  # before the first apply (when this host has one).
+  if ((sysctl_file_removed)); then
+    runtime_restore_original
+  fi
+  # Mark the run as undone, so the next --rollback moves on to the one before it.
+  manifest_add reverted "$run"
   log_info "Rollback of run ${run}: ${restored} restored, ${removed} removed, ${missing} missing."
   printf '%sRollback of run %s:%s %d file(s) restored, %d removed' \
     "$C_OK" "$run" "$C_RESET" "$restored" "$removed"
   ((missing > 0)) && printf ', %s%d backup(s) missing%s' "$C_WARN" "$missing" "$C_RESET"
   printf '\n'
-  printf '%sNote:%s files and live firewall/priority state are reverted; kernel values\n' "$C_MUTED" "$C_RESET"
-  printf '%sloaded by an undone sysctl file settle back after a reboot (or use "Restore original state").%s\n' "$C_MUTED" "$C_RESET"
+  printf '%sNote:%s files, live firewall/priority state and — when this run created the sysctl file — live kernel values are reverted.\n' "$C_MUTED" "$C_RESET"
+  printf '%sRun it again to undo the run before this one.%s\n' "$C_MUTED" "$C_RESET"
   return 0
 }

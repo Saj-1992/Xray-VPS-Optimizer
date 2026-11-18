@@ -18,6 +18,7 @@ readonly -a ST_DOCTOR_CHECKS=(
   'CPU/NIC performance|perf_verify|re-run Quick Optimize'
   'DNS servers|dns_verify|Quick Optimize, then pick the provider again'
   'File limits (nofile)|limits_verify|re-run Quick Optimize'
+  'Running proxies: file limit|limits_live_verify|restart the proxy service or container (Quick Optimize offers it)'
   'Swap|swap_verify|Custom Optimize, enable the swap step'
   'SSH hardening|ssh_verify|Security menu, option 3'
   'Proxy priority|priority_verify|Tools, option p'
@@ -57,7 +58,7 @@ _doctor_run_check() {
 _doctor_json() {
   local entry label fn hint rc first=1
   printf '{"version":"%s","host":"%s","checks":[' \
-    "$ST_VERSION" "$(hostname 2>/dev/null || printf 'unknown')"
+    "$(json_escape "$ST_VERSION")" "$(json_escape "$(hostname 2>/dev/null || printf 'unknown')")"
   for entry in "${ST_DOCTOR_CHECKS[@]}"; do
     IFS='|' read -r label fn hint <<<"$entry"
     declare -F "$fn" >/dev/null 2>&1 || continue
@@ -66,9 +67,9 @@ _doctor_json() {
     ((first)) || printf ','
     first=0
     case "$rc" in
-      0) printf '{"check":"%s","status":"ok"}' "$label" ;;
-      2) printf '{"check":"%s","status":"not_configured"}' "$label" ;;
-      *) printf '{"check":"%s","status":"drift","hint":"%s"}' "$label" "$hint" ;;
+      0) printf '{"check":"%s","status":"ok"}' "$(json_escape "$label")" ;;
+      2) printf '{"check":"%s","status":"not_configured"}' "$(json_escape "$label")" ;;
+      *) printf '{"check":"%s","status":"drift","hint":"%s"}' "$(json_escape "$label")" "$(json_escape "$hint")" ;;
     esac
     case "$rc" in
       0 | 2) : ;;
@@ -76,7 +77,7 @@ _doctor_json() {
     esac
   done
   printf '],"drift":%d,"profile":"%s","tier":"%s"}\n' \
-    "$ST_DOCTOR_DRIFT" "$(config_get last_profile none)" "$(config_get last_tier -)"
+    "$ST_DOCTOR_DRIFT" "$(json_escape "$(config_get last_profile none)")" "$(json_escape "$(config_get last_tier -)")"
 }
 
 # doctor_run — the whole report. Returns 0 when healthy, 3 on drift.

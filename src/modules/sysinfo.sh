@@ -215,7 +215,7 @@ _status_servertools() {
   else
     ui_kv "Applied profile" "$(config_get last_profile 'not applied yet') · tier $(config_get last_tier '-')"
   fi
-  ui_kv "Recorded changes" "$(manifest_entry_count) (last run: $(manifest_latest_run || printf 'none'))"
+  ui_kv "Recorded changes" "$(manifest_entry_count) (last run: $(manifest_latest_run "$ST_MANIFEST_FILE" || printf 'none'))"
   ui_kv "Log file" "$ST_LOG_FILE"
   ui_kv "Backups" "$ST_BACKUP_DIR"
 }

@@ -172,6 +172,10 @@ _optimize_show_plan() {
 
 # _optimize_run WITH_DNS WITH_SWAP WITH_LIMITS WITH_EXTRAS WITH_PERF WITH_PRIO  (each 0/1)
 _optimize_run() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked _optimize_run "$@"
+    return
+  fi
   local with_dns="$1" with_swap="$2" with_limits="$3" with_extras="$4" with_perf="${5:-0}" with_prio="${6:-0}"
   ST_STEP_RESULTS=()
   ST_STEP_IDX=0

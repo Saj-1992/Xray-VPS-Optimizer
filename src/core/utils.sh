@@ -159,6 +159,20 @@ _ss_ports_in_range() {
 # a generated systemd ExecStart line was split across nine lines). These two
 # helpers are the supported way to do each, and must be used instead.
 
+# json_escape TEXT — TEXT as the inside of a JSON string: backslash, double
+# quote and control characters escaped, so a hostname or a message with odd
+# characters can never produce invalid JSON.
+json_escape() {
+  local s="${1-}"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  s="${s//[$'\001'-$'\037']/}"
+  printf '%s' "$s"
+}
+
 # ports_split LIST — one token per line from a "80,443 1000-1002" list.
 ports_split() {
   local -a items=()

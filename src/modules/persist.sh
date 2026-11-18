@@ -73,6 +73,10 @@ persist_verify() {
 
 # persist_repair — re-enable what is disabled, recreate what is missing.
 persist_repair() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked persist_repair
+    return
+  fi
   ui_section "Boot persistence"
   has_cmd systemctl || {
     printf 'No systemd here — nothing to repair.\n'

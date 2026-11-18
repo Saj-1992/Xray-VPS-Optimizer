@@ -33,10 +33,13 @@ SOURCES=(
   modules/vpn.sh
   modules/priority.sh
   modules/isp.sh
+  modules/isp_lists.sh
+  modules/isp_fw.sh
   modules/isplive.sh
   modules/persist.sh
   modules/ipv6.sh
   modules/installer.sh
+  modules/fleet.sh
   modules/tools.sh
   modules/selfupdate.sh
   modules/optimize.sh

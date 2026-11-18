@@ -68,4 +68,11 @@ for list in "${ROOT_DIR}"/data/isp/*.ipv6; do
   grep -qxF "$(sed -n 1p "$list")" "$DIST" || fail "$list is not embedded in dist"
 done
 
+# Docs must not carry a stale hard-coded version number.
+for doc in README.md README_en.md; do
+  while IFS= read -r v; do
+    [[ $v == "v${VERSION}" ]] || fail "${doc} mentions ${v} but VERSION is ${VERSION}"
+  done < <(grep -oE 'v[0-9]+[.][0-9]+[.][0-9]+' "${ROOT_DIR}/${doc}" | sort -u)
+done
+
 printf 'smoke: OK (v%s)\n' "$VERSION"

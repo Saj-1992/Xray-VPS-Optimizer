@@ -25,8 +25,14 @@ _self_source_path() {
 }
 
 # _self_download DEST — fetch, verify (checksum + parse + fingerprint), move.
+#
+# The release file MUST match the published SHA256SUMS. If the checksum file
+# cannot be fetched, sha256sum is missing, or the file is not listed, nothing is
+# replaced — a download that cannot be verified is not installed silently. The
+# raw-branch fallback has no checksum at all and is refused the same way.
+# `--allow-unverified` (ST_ALLOW_UNVERIFIED=1) is the explicit way around it.
 _self_download() {
-  local dest="$1" tmp="${ST_LIB_DIR}/download.$$" from_release=0
+  local dest="$1" tmp="${ST_LIB_DIR}/download.$$" from_release=0 verified=0
   if ! has_cmd curl; then
     log_error "curl is required to download ServerTools."
     return 1
@@ -34,25 +40,38 @@ _self_download() {
 
   if curl -fsSL --max-time 60 "$ST_URL_RELEASE" -o "$tmp" 2>>"$ST_LOG_FILE"; then
     from_release=1
-  elif ! curl -fsSL --max-time 60 "$ST_URL_RAW" -o "$tmp" 2>>"$ST_LOG_FILE"; then
+  elif ((ST_ALLOW_UNVERIFIED == 1)); then
+    log_warn "Release download failed — using the unverified branch copy (--allow-unverified)."
+    if ! curl -fsSL --max-time 60 "$ST_URL_RAW" -o "$tmp" 2>>"$ST_LOG_FILE"; then
+      rm -f "$tmp"
+      log_error "Download failed (release and raw fallback) — see the log."
+      return 1
+    fi
+  else
     rm -f "$tmp"
-    log_error "Download failed (release and raw fallback) — see the log."
+    log_error "The release could not be downloaded. The unverified branch copy is not used unless you pass --allow-unverified."
     return 1
   fi
 
-  if ((from_release)) && has_cmd sha256sum; then
+  if ((from_release)); then
     local sums expected actual
     sums="$(curl -fsSL --max-time 30 "$ST_URL_RELEASE_SUMS" 2>>"$ST_LOG_FILE")" || sums=''
-    if [[ -z $sums ]]; then
-      log_warn "SHA256SUMS could not be fetched — the release was NOT checksum-verified."
-      printf '%sWarning:%s checksum file unavailable; only syntax checks were run.\n' "$C_WARN" "$C_RESET"
-    fi
-    if [[ -n $sums ]]; then
-      expected="$(awk '/server-tools\.sh/ {print $1; exit}' <<<"$sums")"
+    expected="$(awk '/server-tools\.sh/ {print $1; exit}' <<<"$sums")"
+    if [[ -n $expected ]] && has_cmd sha256sum; then
       actual="$(sha256sum "$tmp" | awk '{print $1}')"
-      if [[ -n $expected && $expected != "$actual" ]]; then
+      if [[ $expected != "$actual" ]]; then
         rm -f "$tmp"
         log_error "SHA-256 mismatch on the downloaded release — aborting."
+        return 1
+      fi
+      verified=1
+    fi
+    if ((verified == 0)); then
+      if ((ST_ALLOW_UNVERIFIED == 1)); then
+        log_warn "The release was NOT checksum-verified (--allow-unverified)."
+      else
+        rm -f "$tmp"
+        log_error "The release could not be verified (SHA256SUMS or sha256sum unavailable) — nothing was replaced. Retry later, or pass --allow-unverified."
         return 1
       fi
     fi
@@ -80,6 +99,10 @@ _self_reload_isp() {
 }
 
 st_self_install() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked st_self_install
+    return
+  fi
   local src
   mkdir -p "$(dirname "$ST_INSTALL_PATH")"
   # Deliberately NOT tracked: the installed command is the tool itself, not a
@@ -98,6 +121,10 @@ st_self_install() {
 }
 
 st_self_update() {
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked st_self_update
+    return
+  fi
   local target new_ver staged="${ST_LIB_DIR}/update.$$"
   if [[ -f $ST_INSTALL_PATH ]]; then
     target="$ST_INSTALL_PATH"

@@ -37,9 +37,9 @@ Quick/Custom Optimize flows with honest per-step outcomes.
   `--no-swap/--no-limits/--no-extras`); `--install` to
   `/usr/local/bin/st`; `--update` self-update (release-first with SHA-256
   verification, raw-main fallback, `bash -n` + fingerprint gate).
-- Remaining: tag `v2.0.0` after the release criteria below pass on a real
-  server; then switch README install links from `main` to
-  `releases/latest`.
+- Done: tagged releases are published (the project is long past v2.0.0) and
+  the README install commands point at `releases/latest`, the checksum-verified
+  asset. The criteria below stay as the standing release checklist.
 
 ## Backlog (unscheduled ideas)
 

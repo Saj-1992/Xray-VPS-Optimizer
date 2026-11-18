@@ -61,12 +61,20 @@ node_backup() {
 
 readonly ST_URL_PGNODE='https://raw.githubusercontent.com/PasarGuard/scripts/main/pg-node.sh'
 readonly ST_URL_XUI='https://raw.githubusercontent.com/alireza0/x-ui/master/install.sh'
+readonly ST_URL_3XUI='https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh'
+readonly ST_URL_MZNODE='https://raw.githubusercontent.com/Gozargah/Marzban-scripts/master/marzban-node.sh'
 
-# _app_normalize WORD — canonical app key (pg-node | xui), failing for others.
+# --sha256 HEX: refuse the installer unless it has exactly this hash (pinning).
+ST_APP_SHA256=''
+
+# _app_normalize WORD — canonical app key (pg-node | marzban-node | xui | 3xui),
+# failing for others.
 _app_normalize() {
   case "${1,,}" in
     pg-node | pgnode | pasarguard | pasarguard-node) printf 'pg-node' ;;
     xui | x-ui | alireza0) printf 'xui' ;;
+    3xui | 3x-ui | mhsanaei | sanaei) printf '3xui' ;;
+    marzban-node | marzbannode | mznode) printf 'marzban-node' ;;
     *) return 1 ;;
   esac
 }
@@ -75,13 +83,18 @@ _app_label() {
   case "$1" in
     pg-node) printf 'Pasarguard node (pg-node)' ;;
     xui) printf 'x-ui panel (alireza0)' ;;
+    3xui) printf '3x-ui panel (MHSanaei)' ;;
+    marzban-node) printf 'Marzban node' ;;
   esac
 }
 
 _app_installed() {
   case "$1" in
     pg-node) [[ -d /opt/pg-node || -x /usr/local/bin/pg-node ]] ;;
-    xui) [[ -x /usr/local/x-ui/x-ui || -f /etc/systemd/system/x-ui.service ]] ;;
+    # alireza0's x-ui and MHSanaei's 3x-ui both live in /usr/local/x-ui and use
+    # the x-ui service: one host holds only one of them.
+    xui | 3xui) [[ -x /usr/local/x-ui/x-ui || -f /etc/systemd/system/x-ui.service ]] ;;
+    marzban-node) [[ -d /opt/marzban-node || -x /usr/local/bin/marzban-node ]] ;;
     *) return 1 ;;
   esac
 }
@@ -93,7 +106,7 @@ _app_state() {
     return 0
   fi
   case "$1" in
-    xui)
+    xui | 3xui)
       if has_cmd systemctl && systemctl is-active --quiet x-ui 2>/dev/null; then
         printf 'installed, running'
       else
@@ -114,28 +127,38 @@ _app_state() {
 _app_manager_hint() {
   case "$1" in
     pg-node) printf 'pg-node update | pg-node restart | pg-node logs | pg-node uninstall' ;;
-    xui) printf 'x-ui   (menu: update, restart, settings, uninstall)' ;;
+    xui | 3xui) printf 'x-ui   (menu: update, restart, settings, uninstall)' ;;
+    marzban-node) printf 'marzban-node update | restart | logs | uninstall' ;;
   esac
 }
 
 app_status() {
   local app
   ui_section "Panels and nodes"
-  for app in pg-node xui; do
+  for app in pg-node marzban-node xui 3xui; do
     ui_kv "$(_app_label "$app")" "$(_app_state "$app")"
   done
 }
 
 # app_install APP — fetch, verify, show, run the official installer.
 app_install() {
-  local app url args=() tmp script rc=0 size sum
-  app="$(_app_normalize "${1:-}")" || die "Unknown app '${1:-}'. Use: pg-node | xui"
+  if [[ ${ST_LOCKED:-0} != 1 ]]; then
+    st_locked app_install "$@"
+    return
+  fi
+  local app url args=() tmp script rc=0 size sum full
+  app="$(_app_normalize "${1:-}")" || die "Unknown app '${1:-}'. Use: pg-node | marzban-node | xui | 3xui"
   case "$app" in
     pg-node)
       url="$ST_URL_PGNODE"
       args=(install)
       ;;
     xui) url="$ST_URL_XUI" ;;
+    3xui) url="$ST_URL_3XUI" ;;
+    marzban-node)
+      url="$ST_URL_MZNODE"
+      args=(install)
+      ;;
   esac
 
   ui_section "Install $(_app_label "$app")"
@@ -164,7 +187,13 @@ app_install() {
     return 1
   fi
   size="$(wc -c <"$script" | tr -d '[:space:]')"
-  sum="$(sha256sum "$script" 2>/dev/null | cut -c1-16)"
+  full="$(sha256sum "$script" 2>/dev/null | awk '{print $1}')"
+  sum="${full:0:16}"
+  if [[ -n $ST_APP_SHA256 && ${ST_APP_SHA256,,} != "$full" ]]; then
+    rm -rf "$tmp"
+    log_error "The installer's SHA-256 (${full}) is not the one you pinned with --sha256 — nothing was run."
+    return 1
+  fi
   ui_kv "Source" "$url"
   ui_kv "Size" "${size} bytes   sha256 ${sum}…"
   printf '%sThe project'"'"'s own installer runs as root and may install Docker and packages.%s\n' "$C_MUTED" "$C_RESET"
@@ -188,7 +217,7 @@ app_install() {
   return 0
 }
 
-# app_cli SUB — `st setup pg-node | xui | status`.
+# app_cli SUB — `st setup pg-node | marzban-node | xui | 3xui | status`.
 app_cli() {
   case "${1:-status}" in
     status) app_status ;;

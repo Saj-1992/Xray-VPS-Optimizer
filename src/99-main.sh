@@ -17,7 +17,8 @@ Actions (no action starts the interactive menu):
                         (accepts --users / --qdisc / --dns / --profile)
   isp SUB [LIST]        Iran ISP blocker: status | live | check IP | scope all|443,8443 | block mci,mtn | unblock mtn | set LIST | all | none | update
                         live = connections per ISP now (add --watch, --interval N, --port 443,8443)
-  setup APP             Install a panel/node with its official installer: pg-node | xui | status
+  setup APP             Install a panel/node with its official installer:
+                        pg-node | marzban-node | xui | 3xui | status (--sha256 HEX pins the installer)
   isp-restore           Reload the Iran ISP blocker from its saved settings (boot unit)
   repair                Make sure every setting comes back after a reboot (re-enable units)
   boost                 Re-apply proxy priority to running services/containers
@@ -29,7 +30,10 @@ Actions (no action starts the interactive menu):
   --rollback            Revert the latest recorded run and exit
   --rollback-original   Restore the state from before ServerTools ever ran
   --install             Install as the 'st' command (/usr/local/bin/st)
-  --update              Self-update from the latest GitHub release
+  --config-export [FILE]  Write the portable settings (profile, qdisc, DNS, ISP blocker...)
+  --config-import FILE    Validate and merge such a file into this server (applies nothing)
+  --update              Self-update from the latest GitHub release (SHA-256 verified;
+                        --allow-unverified installs even when it cannot be checked)
 
 Options for --auto and --dry-run:
   --profile NAME        general | vpn-node | wireguard | panel | accounting | full
@@ -71,7 +75,7 @@ _need_value() { # _need_value OPTION VALUE
 }
 
 main() {
-  local action="menu" tuning_opts='' ST_SETUP_APP='status'
+  local action="menu" tuning_opts='' ST_SETUP_APP='status' ST_CONFIG_ARG=''
   while (($# > 0)); do
     case "$1" in
       -v | --version)
@@ -107,6 +111,19 @@ main() {
           ST_ISP_LIST="$2"
           shift
         fi
+        ;;
+      --config-export)
+        action="config_export"
+        if [[ -n ${2:-} && $2 != -* ]]; then
+          ST_CONFIG_ARG="$2"
+          shift
+        fi
+        ;;
+      --config-import)
+        action="config_import"
+        _need_value "$1" "${2:-}"
+        shift
+        ST_CONFIG_ARG="$1"
         ;;
       --dry-run) action="dryrun" ;;
       --verify | --doctor) action="verify" ;;
@@ -166,6 +183,16 @@ main() {
       --no-perf)
         ST_AUTO_PERF=0
         tuning_opts='yes'
+        ;;
+      --allow-unverified) ST_ALLOW_UNVERIFIED=1 ;;
+      --sha256)
+        _need_value "$1" "${2:-}"
+        shift
+        if [[ ! $1 =~ ^[0-9a-fA-F]{64}$ ]]; then
+          printf 'Invalid --sha256 (64 hex characters expected)\n' >&2
+          exit 2
+        fi
+        ST_APP_SHA256="$1"
         ;;
       -w | --watch) ST_LIVE_WATCH=1 ;;
       --interval)
@@ -230,6 +257,14 @@ main() {
       ST_OPT_BATCH=1
       isp_cli "$ST_ISP_SUB" "$ST_ISP_LIST" || st_escalate_exit $?
       ;;
+    config_export)
+      ST_OPT_BATCH=1
+      config_export "$ST_CONFIG_ARG"
+      ;;
+    config_import)
+      ST_OPT_BATCH=1
+      config_import "$ST_CONFIG_ARG"
+      ;;
     setup)
       ST_OPT_BATCH=1
       app_cli "$ST_SETUP_APP" || st_escalate_exit $?
@@ -288,4 +323,7 @@ main() {
   return "$ST_EXIT_CODE"
 }
 
-main "$@"
+# ST_SOURCE_ONLY=1 loads the functions without running anything (tests/unit.sh).
+if [[ ${ST_SOURCE_ONLY:-0} != 1 ]]; then
+  main "$@"
+fi

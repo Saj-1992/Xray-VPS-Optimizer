@@ -44,7 +44,7 @@ menu_rollback() {
   ui_logo
   ui_title "Rollback"
   local run choice
-  run="$(manifest_latest_run)"
+  run="$(manifest_latest_run "$ST_MANIFEST_FILE")"
   if [[ -z $run ]]; then
     printf 'No recorded changes yet — nothing to roll back.\n'
     ui_pause

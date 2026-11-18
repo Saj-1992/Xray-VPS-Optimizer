@@ -4,6 +4,36 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.15.0] — 2026-11-18
+
+Hardening and housekeeping from a project review: verification where it was optional, locking, rollback that behaves, tests that cover the pure logic.
+
+### Security
+
+- **`st --update` refuses what it cannot verify.** The release must match the published SHA256SUMS; if the checksum file cannot be fetched, sha256sum is missing, or the release download fails (the raw-branch fallback has no checksum at all), nothing is replaced. `--allow-unverified` is the explicit way around it.
+- **ISP lists are checksum-verified** on `st isp update`: the sync workflow now publishes `data/isp/SHA256SUMS`; a list that does not match is not used (the current one is kept).
+- **The Ookla speed-test client is pinned** by SHA-256 per architecture and is not unpacked or run when it differs.
+- **`st setup`**: Marzban node and MHSanaei 3x-ui join Pasarguard node and alireza0 x-ui; `--sha256 HEX` pins an installer to an exact hash. Only one x-ui-style panel is installed per host (both use /usr/local/x-ui).
+
+### Added
+
+- **Run lock.** Changes to settings, the ISP blocker, the optimize pipeline, rollbacks, self-update and installers take an exclusive lock (`/run/lock/server-tools.lock`, waits up to 120 s). Two `st` runs can no longer interleave writes to the config, the manifest or the ipsets. It covers the operation, not a whole menu session, so the boot unit never waits behind an open menu.
+- **`st --config-export [FILE]` / `st --config-import FILE`**: carry the portable settings (profile, qdisc, DNS, ISP blocker...) from one server to the next. Import validates every line first and applies nothing by itself.
+- **Doctor: "Running proxies: file limit"** reads `Max open files` from /proc of the running Xray/sing-box processes and containers — the limit they really have, not the one on disk.
+- **`tests/unit.sh`** (81 checks: validators, `ver_ge`, JSON escaping, ports, the sysctl "never lower a kernel default" rule, manifest/rollback bookkeeping, ISP parsing, the live classifier, settings import, the lock). CI runs it, plus `--dry-run` and `--verify` (and checks that `--verify --json` is valid JSON) in the five distro containers. ShellCheck now also covers the unit tests and tools/merge-isp.sh.
+
+### Fixed
+
+- **A second `st --rollback` repeated the same run.** A rolled-back run is now marked in the manifest, so the next rollback goes on to the one before it. When the run being undone created the sysctl file, the live kernel values are put back from the pre-tuning snapshot (before, they settled back only at the next reboot).
+- **`--verify --json` could produce invalid JSON** (hostname, profile, hints with quotes or backslashes); every string is now escaped.
+- **Containers (LXC / OpenVZ / Docker-like):** sysctl keys that the guest may not change no longer show up as permanent drift.
+- Docs: README no longer carries a stale version number (and a smoke check keeps it that way), install commands point at the checksum-verified `releases/latest` asset, ROADMAP no longer lists v2.0.0 as pending.
+
+### Changed
+
+- The ISP blocker's code is split by job: `isp.sh` (settings, status, menu, CLI), `isp_lists.sh` (address lists), `isp_fw.sh` (ipsets, chains, boot unit, apply/verify). Functions were moved verbatim.
+- Not done on purpose: native nftables backend for the blocker, an automatic Docker+UFW fix, irqbalance/NIC ring tuning, multi-snapshot history, UI language switch — each needs its own design and a real-host test.
+
 ## [2.14.4] — 2026-11-16
 
 ### Fixed

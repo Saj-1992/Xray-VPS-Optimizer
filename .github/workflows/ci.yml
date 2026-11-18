@@ -16,7 +16,7 @@ jobs:
       - name: Build
         run: bash build.sh
       - name: ShellCheck
-        run: shellcheck dist/server-tools.sh build.sh tests/smoke.sh
+        run: shellcheck dist/server-tools.sh build.sh tests/smoke.sh tests/unit.sh tools/merge-isp.sh
       - name: shfmt (formatting check)
         run: shfmt -i 2 -ci -d src build.sh tests
 

@@ -44,6 +44,15 @@ for up in "${DATA}"/upstream/*.ipv4; do
     rm -f "${DATA}/${id}.ipv6"
   fi
 done
+# Integrity file for `st isp update` (sha256, name) — covers every merged list.
+(
+  cd "$DATA"
+  for f in *.ipv4 *.ipv6; do
+    if [[ -f $f ]]; then
+      sha256sum "$f"
+    fi
+  done
+) | sed 's/ [*]/  /' >"${DATA}/SHA256SUMS"
 printf 'merged %d lists (%d with IPv6)\n' \
   "$(find "$DATA" -maxdepth 1 -name '*.ipv4' | wc -l)" \
   "$(find "$DATA" -maxdepth 1 -name '*.ipv6' | wc -l)"
